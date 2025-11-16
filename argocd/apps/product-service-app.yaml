@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: product-service
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/YOUR_ORG/YOUR_REPO.git   # <-- replace with your repo URL
+    targetRevision: HEAD
+    path: helm/product-service
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: leninkart-{{ .Release.Name | default "dev" }}   # placeholder; ArgoCD will deploy to chosen namespace
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
