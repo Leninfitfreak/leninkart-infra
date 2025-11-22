@@ -1,8 +1,8 @@
 replicaCount: 1
 
 image:
-  repository: asia-south1-docker.pkg.dev/YOUR_PROJECT/YOUR_REPO/product-service
-  tag: latest
+  repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/product-service
+  tag: "9a90fe4aa99dd74a685685537e6e83511eb1eaab"
   pullPolicy: IfNotPresent
 
 service:
