@@ -1,4 +1,4 @@
-# Leninkart App-of-Apps (example)
+# Leninkart App-of-Apps
 
 This repo subtree contains example Helm charts for 3 services and an ArgoCD App-of-Apps setup.
 
