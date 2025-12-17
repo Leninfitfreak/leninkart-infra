@@ -1,0 +1,11 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: leninkart
+  namespace: argocd
+spec:
+  sourceRepos:
+    - https://github.com/Leninfitfreak/leninkart-infra
+  destinations:
+    - namespace: '*'
+      server: https://kubernetes.default.svc

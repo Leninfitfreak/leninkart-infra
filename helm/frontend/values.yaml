@@ -1,17 +1,25 @@
 replicaCount: 1
-
 image:
-  repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/frontend
-  tag: "483a614321df35fee93fd0f7ce3d8ebc93fa2e62"
+  repository: asia-south1-docker.pkg.dev/YOUR_PROJECT/leninkart/frontend
+  tag: dev-latest
   pullPolicy: IfNotPresent
 
 service:
-  type: LoadBalancer
+  type: ClusterIP
   port: 80
-  targetPort: 3000
 
-resources: {}
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
 
-nodeSelector: {}
-tolerations: []
-affinity: {}
+readinessProbe:
+  path: /health
+  initialDelaySeconds: 30
+
+livenessProbe:
+  path: /health
+  initialDelaySeconds: 60

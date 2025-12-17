@@ -1,23 +1,32 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: { '{' } include "frontend.fullname" . { '}' }
-  labels:
-    app: { '{' } include "frontend.name" . { '}' }
+  name: frontend
 spec:
-  replicas: { '{' } .Values.replicaCount { '}' }
+  replicas: { { .Values.replicaCount } }
   selector:
     matchLabels:
-      app: { '{' } include "frontend.name" . { '}' }
+      app: frontend
   template:
     metadata:
       labels:
-        app: { '{' } include "frontend.name" . { '}' }
+        app: frontend
     spec:
       containers:
-        - name: { '{' } include "frontend.name" . { '}' }
-          image: "{ '{' } .Values.image.repository { '}' }:{ '{' } .Values.image.tag { '}' }"
-          imagePullPolicy: { '{' } .Values.image.pullPolicy { '}' }
+        - name: frontend
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - containerPort: { '{' } .Values.service.targetPort { '}' }
-          resources: { '{' } toYaml .Values.resources | nindent 12 { '}' }
+            - containerPort: {{ .Values.service.port }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.readinessProbe.path }}
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.livenessProbe.path }}
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

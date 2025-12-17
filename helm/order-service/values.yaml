@@ -1,17 +1,25 @@
 replicaCount: 1
-
 image:
-  repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/order-service
-  tag: "62f2f8859454bf625e97f3cfc7d10d3d4d3192ae"
+  repository: asia-south1-docker.pkg.dev/YOUR_PROJECT/leninkart/order-service
+  tag: dev-latest
   pullPolicy: IfNotPresent
 
 service:
-  type: LoadBalancer
-  port: 80
-  targetPort: 8080
+  type: ClusterIP
+  port: 8080
 
-resources: {}
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
 
-nodeSelector: {}
-tolerations: []
-affinity: {}
+readinessProbe:
+  path: /health
+  initialDelaySeconds: 30
+
+livenessProbe:
+  path: /health
+  initialDelaySeconds: 60

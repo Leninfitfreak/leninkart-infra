@@ -1,23 +1,32 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: { '{' } include "product-service.fullname" . { '}' }
-  labels:
-    app: { '{' } include "product-service.name" . { '}' }
+  name: product-service
 spec:
-  replicas: { '{' } .Values.replicaCount { '}' }
+  replicas: { { .Values.replicaCount } }
   selector:
     matchLabels:
-      app: { '{' } include "product-service.name" . { '}' }
+      app: product-service
   template:
     metadata:
       labels:
-        app: { '{' } include "product-service.name" . { '}' }
+        app: product-service
     spec:
       containers:
-        - name: { '{' } include "product-service.name" . { '}' }
-          image: "{ '{' } .Values.image.repository { '}' }:{ '{' } .Values.image.tag { '}' }"
-          imagePullPolicy: { '{' } .Values.image.pullPolicy { '}' }
+        - name: product-service
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - containerPort: { '{' } .Values.service.targetPort { '}' }
-          resources: { '{' } toYaml .Values.resources | nindent 12 { '}' }
+            - containerPort: {{ .Values.service.port }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.readinessProbe.path }}
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.livenessProbe.path }}
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

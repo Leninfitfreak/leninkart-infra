@@ -1,17 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: leninkart-root
+  name: product-service-staging
   namespace: argocd
 spec:
-  project: default
+  project: leninkart
   source:
-    repoURL: https://github.com/YOUR_ORG/YOUR_REPO.git    # <-- replace with your repo URL
-    targetRevision: HEAD
-    path: argocd/apps
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra
+    targetRevision: staging
+    path: helm/product-service
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: staging
   syncPolicy:
     automated:
       prune: true
