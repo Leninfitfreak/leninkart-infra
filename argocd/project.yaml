@@ -4,8 +4,19 @@ metadata:
   name: leninkart
   namespace: argocd
 spec:
+  description: LeninKart GitOps Project
+
   sourceRepos:
     - https://github.com/Leninfitfreak/leninkart-infra
+
   destinations:
     - namespace: '*'
       server: https://kubernetes.default.svc
+
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
