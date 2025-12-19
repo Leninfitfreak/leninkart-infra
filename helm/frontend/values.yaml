@@ -1,13 +1,11 @@
 replicaCount: 1
 image:
   repository: asia-south1-docker.pkg.dev/YOUR_PROJECT/leninkart/frontend
-  tag: dev-latest
+  tag: dev-ec43b5e
   pullPolicy: IfNotPresent
-
 service:
   type: ClusterIP
   port: 80
-
 resources:
   requests:
     cpu: 100m
@@ -15,11 +13,9 @@ resources:
   limits:
     cpu: 300m
     memory: 256Mi
-
 readinessProbe:
   path: /health
   initialDelaySeconds: 30
-
 livenessProbe:
   path: /health
   initialDelaySeconds: 60
