@@ -2,8 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: order-service
+  labels:
+    app: order-service
 spec:
-  replicas: { { .Values.replicaCount } }
+  replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
       app: order-service
@@ -18,15 +20,18 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.service.port }}
+
           readinessProbe:
             httpGet:
               path: {{ .Values.readinessProbe.path }}
               port: {{ .Values.service.port }}
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+
           livenessProbe:
             httpGet:
               path: {{ .Values.livenessProbe.path }}
               port: {{ .Values.service.port }}
             initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+{{ toYaml .Values.resources | indent 12 }}
