@@ -1,8 +1,17 @@
 replicaCount: 1
+
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/frontend
-  tag: dev-latest
   pullPolicy: IfNotPresent
+  # Recommended: use a specific tag instead of 'dev-latest' for reproducibility
+  tag: "dev-latest"
+
+imagePullSecrets: []
+# Example for GCP Artifact Registry (uncomment and adjust if needed):
+# - name: gcp-artifact-registry-secret
+
+nameOverride: ""
+fullnameOverride: ""
 
 service:
   type: ClusterIP
@@ -17,9 +26,30 @@ resources:
     memory: 256Mi
 
 readinessProbe:
-  path: /health
+  httpGet:
+    path: /health
+    port: http  # or 80
   initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 3
 
 livenessProbe:
-  path: /health
+  httpGet:
+    path: /health
+    port: http
   initialDelaySeconds: 60
+  periodSeconds: 10
+  failureThreshold: 6
+
+# Optional: Horizontal Pod Autoscaler (uncomment to enable)
+# autoscaling:
+#   enabled: false
+#   minReplicas: 1
+#   maxReplicas: 10
+#   targetCPUUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
