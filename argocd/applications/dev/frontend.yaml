@@ -6,9 +6,13 @@ metadata:
 spec:
   project: leninkart
   source:
-    repoURL: https://github.com/Leninfitfreak/leninkart-infra
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: dev
-    path: helm/frontend
+    path: helm/frontend  # Adjust this! If the YAML is deep in argocd/applications/dev/, use ../../helm/frontend
+    helm:
+      valueFiles:
+        - values.yaml  # Or just rely on the default values.yaml in the chart
+      # parameters: []  # Use this if overriding specific keys
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
@@ -16,3 +20,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
