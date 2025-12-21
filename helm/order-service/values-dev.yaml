@@ -1,15 +1,14 @@
 replicaCount: 1
+
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/order-service
-<<<<<<< HEAD
-  tag: "9d0e38a97c699c5a01794f932db2a7648bbcb961"
-=======
-  tag: "9d0e38a97c699c5a01794f932db2a7648bbcb961"
->>>>>>> 38b5217418ed81bdd109e7e8b9feacd131b7679d
+  tag: dev-build-__TO_BE_SET_BY_CI__
   pullPolicy: IfNotPresent
+
 service:
   type: ClusterIP
   port: 8080
+
 resources:
   requests:
     cpu: 100m
@@ -17,34 +16,19 @@ resources:
   limits:
     cpu: 300m
     memory: 256Mi
-startupProbe:
+
+readinessProbe:
   httpGet:
     path: /health
     port: 8080
-  initialDelaySeconds: 10
-  periodSeconds: 10
-  failureThreshold: 30
-readinessProbe:
-  httpGet:
-    path: /actuator/health
-    port: 8080
-  initialDelaySeconds: 45
+  initialDelaySeconds: 30
   periodSeconds: 10
   failureThreshold: 6
+
 livenessProbe:
   httpGet:
-    path: /actuator/health
+    path: /health
     port: 8080
-  initialDelaySeconds: 90
-  periodSeconds: 15
+  initialDelaySeconds: 60
+  periodSeconds: 10
   failureThreshold: 10
-env:
-- name: SPRING_DATASOURCE_URL
-  value: jdbc:mysql://mysql.dev.svc.cluster.local:3306/leninkart
-- name: SPRING_DATASOURCE_USERNAME
-  value: root
-- name: SPRING_DATASOURCE_PASSWORD
-  value: root123
-- name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-  value: kafka.dev.svc.cluster.local:9092
-containerPort: 8080
