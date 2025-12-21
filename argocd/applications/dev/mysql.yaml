@@ -8,16 +8,27 @@ spec:
   source:
     repoURL: https://charts.bitnami.com/bitnami
     chart: mysql
-    targetRevision: 9.10.8  # Stable version
+    targetRevision: 9.10.8  # Good stable version
     helm:
       values: |
+        architecture: standalone  # Explicit for dev (single primary)
         auth:
-          rootPassword: root123  # Change in prod!
+          rootPassword: root123      # Change in prod! Use secret
           database: leninkart
+          createDatabase: true       # Ensures DB creation
         primary:
           persistence:
             enabled: true
             size: 8Gi
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+        secondary:
+          replicaCount: 0  # No replicas in dev to save resources
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
