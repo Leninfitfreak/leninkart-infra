@@ -1,58 +1,47 @@
 replicaCount: 1
-
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/order-service
-  tag: "965b9ab4fff4d5292fc8124ad5e50c91ff933593"  # New image with MySQL driver
+  tag: 965b9ab4fff4d5292fc8124ad5e50c91ff933593
   pullPolicy: IfNotPresent
-
 service:
   type: ClusterIP
   port: 8080
-
 resources:
   requests:
-    cpu: 100m        # Lower for Autopilot scheduling
+    cpu: 100m
     memory: 128Mi
   limits:
     cpu: 300m
     memory: 256Mi
-
-startupProbe:        # Gives extra time for DB connection on first start
+startupProbe:
   httpGet:
     path: /health
     port: 8080
   initialDelaySeconds: 10
   periodSeconds: 10
-  failureThreshold: 30  # ~5 minutes grace
-
+  failureThreshold: 30
 readinessProbe:
   httpGet:
     path: /health
     port: 8080
   initialDelaySeconds: 30
-  periodSeconds: 10
-  failureThreshold: 6
-
 livenessProbe:
   httpGet:
     path: /health
     port: 8080
   initialDelaySeconds: 60
-  periodSeconds: 10
-  failureThreshold: 10
-
 env:
-  - name: SPRING_DATASOURCE_URL
-    value: "jdbc:mysql://mysql.dev.svc.cluster.local:3306/leninkart?useSSL=false&allowPublicKeyRetrieval=true"
-  - name: SPRING_DATASOURCE_USERNAME
-    value: "root"
-  - name: SPRING_DATASOURCE_PASSWORD
-    value: "root123"
-  - name: SPRING_DATASOURCE_DRIVER_CLASS_NAME
-    value: "com.mysql.cj.jdbc.Driver"
-  - name: SPRING_JPA_HIBERNATE_DDL_AUTO
-    value: "update"
-  - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-    value: "kafka.dev.svc.cluster.local:9092"
-  - name: SERVER_PORT
-    value: "8080"
+- name: SPRING_DATASOURCE_URL
+  value: jdbc:mysql://mysql.dev.svc.cluster.local:3306/leninkart?useSSL=false&allowPublicKeyRetrieval=true
+- name: SPRING_DATASOURCE_USERNAME
+  value: root
+- name: SPRING_DATASOURCE_PASSWORD
+  value: root123
+- name: SPRING_DATASOURCE_DRIVER_CLASS_NAME
+  value: com.mysql.cj.jdbc.Driver
+- name: SPRING_JPA_HIBERNATE_DDL_AUTO
+  value: update
+- name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+  value: kafka.dev.svc.cluster.local:9092
+- name: SERVER_PORT
+  value: '8080'
