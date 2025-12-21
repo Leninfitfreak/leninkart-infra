@@ -2,9 +2,9 @@ replicaCount: 1
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/order-service
 <<<<<<< HEAD
-  tag: will-be-overwritten-by-ci
+  tag: "9d0e38a97c699c5a01794f932db2a7648bbcb961"
 =======
-  tag: "a6c47ac430493796161767f4962faa8b78b463ee"
+  tag: "9d0e38a97c699c5a01794f932db2a7648bbcb961"
 >>>>>>> 38b5217418ed81bdd109e7e8b9feacd131b7679d
   pullPolicy: IfNotPresent
 service:
