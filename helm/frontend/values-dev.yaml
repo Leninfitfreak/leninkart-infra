@@ -1,7 +1,7 @@
 replicaCount: 1
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/frontend
-  tag: will-be-overwritten-by-ci
+  tag: dev-9-98028ef
   pullPolicy: IfNotPresent
 service:
   type: ClusterIP
