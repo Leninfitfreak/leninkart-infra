@@ -19,17 +19,17 @@ resources:
 
 readinessProbe:
   httpGet:
-    path: /health
+    path: /actuator/health
     port: 8080
-  initialDelaySeconds: 25
+  initialDelaySeconds: 45
   periodSeconds: 10
   failureThreshold: 6
 
 livenessProbe:
   httpGet:
-    path: /health
+    path: /actuator/health
     port: 8080
-  initialDelaySeconds: 60
+  initialDelaySeconds: 90
   periodSeconds: 10
   failureThreshold: 10
 
@@ -44,7 +44,7 @@ env:
     value: "root"
 
   - name: SPRING_DATASOURCE_PASSWORD
-    value: "root123"   # move to secret later
+    value: "root123"
 
   - name: SPRING_DATASOURCE_DRIVER_CLASS_NAME
     value: "com.mysql.cj.jdbc.Driver"
