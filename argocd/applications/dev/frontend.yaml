@@ -16,7 +16,3 @@ spec:
     automated:
       prune: true
       selfHeal: true
-<<<<<<< HEAD
-
-=======
->>>>>>> b9dfa1f (Generate Argo CD apps for all services and environments)
