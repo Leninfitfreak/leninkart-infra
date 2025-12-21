@@ -1,14 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: order-service-dev
+  name: dev-order-service
   namespace: argocd
 spec:
   project: leninkart
   source:
-    repoURL: https://github.com/Leninfitfreak/leninkart-infra
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: dev
     path: helm/order-service
+    helm:
+      valueFiles:
+        - values-dev.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
@@ -16,3 +19,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
