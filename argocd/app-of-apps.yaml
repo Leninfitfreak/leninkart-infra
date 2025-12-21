@@ -1,19 +1,24 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: order-dev
+  name: leninkart-root  # Root app name – clear and unique
   namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io  # Ensures clean deletion of child apps
 spec:
-  project: leninkart
+  project: leninkart  # Use your existing project
   source:
-    repoURL: https://github.com/Leninfitfreak/leninkart-infra
-    targetRevision: main
-    path: argocd/applications
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev  # Change to main/staging/prod as needed for different roots
+    path: argocd/applications/dev  # Points to folder with child apps (e.g., dev-frontend.yaml, order-dev.yaml)
+    directory:
+      recurse: true  # Includes all YAML files in subdirs if needed
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: argocd  # Child apps deploy to their own namespaces
   syncPolicy:
     automated:
-      prune: true
-      selfHeal: true
-
+      prune: true     # Auto-delete removed child apps
+      selfHeal: true  # Auto-fix drift
+    syncOptions:
+      - CreateNamespace=true

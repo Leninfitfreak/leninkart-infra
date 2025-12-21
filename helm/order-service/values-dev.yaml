@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/order-service
-  tag: "a6c47ac430493796161767f4962faa8b78b463ee"
+  tag: "a6c47ac430493796161767f4962faa8b78b463ee"  # Updated by CI
   pullPolicy: IfNotPresent
 
 service:
@@ -11,16 +11,37 @@ service:
 
 resources:
   requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 300m
+    cpu: 200m      # Increased slightly (Spring Boot can be hungry)
     memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
 
 readinessProbe:
-  path: /health
+  httpGet:
+    path: /health
+    port: 8080   # Critical: add port
   initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 6
 
 livenessProbe:
-  path: /health
+  httpGet:
+    path: /health
+    port: 8080   # Critical: add port
   initialDelaySeconds: 60
+  periodSeconds: 10
+  failureThreshold: 10
+
+# Environment variables for Spring Boot (from your local .env)
+env:
+  - name: SPRING_DATASOURCE_URL
+    value: jdbc:mysql://mysql.dev.svc.cluster.local:3306/leninkart?useSSL=false&allowPublicKeyRetrieval=true
+  - name: SPRING_DATASOURCE_USERNAME
+    value: root
+  - name: SPRING_DATASOURCE_PASSWORD
+    value: root123  # Change to secret in prod!
+  - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+    value: kafka.dev.svc.cluster.local:9092
+  - name: SERVER_PORT
+    value: "8080"

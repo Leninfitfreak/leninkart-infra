@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dev-mysql
+  namespace: argocd
+spec:
+  project: leninkart
+  source:
+    repoURL: https://charts.bitnami.com/bitnami
+    chart: mysql
+    targetRevision: 9.10.8  # Stable version
+    helm:
+      values: |
+        auth:
+          rootPassword: root123  # Change in prod!
+          database: leninkart
+        primary:
+          persistence:
+            enabled: true
+            size: 8Gi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
