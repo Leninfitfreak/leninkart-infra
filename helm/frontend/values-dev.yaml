@@ -1,11 +1,17 @@
 replicaCount: 1
+
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/frontend
   tag: dev-9-98028ef
   pullPolicy: IfNotPresent
+
 service:
   type: ClusterIP
   port: 3000
+
+container:
+  port: 3000
+
 resources:
   requests:
     cpu: 100m
@@ -13,25 +19,19 @@ resources:
   limits:
     cpu: 300m
     memory: 256Mi
-startupProbe:
-  httpGet:
-    path: /health
-    port: 80
-  initialDelaySeconds: 10
-  periodSeconds: 10
-  failureThreshold: 30
-containerPort: 3000
+
 readinessProbe:
   httpGet:
     path: /
     port: 3000
-  initialDelaySeconds: 45
+  initialDelaySeconds: 30
   periodSeconds: 10
-  failureThreshold: 6
+  failureThreshold: 5
+
 livenessProbe:
   httpGet:
     path: /
     port: 3000
-  initialDelaySeconds: 90
+  initialDelaySeconds: 60
   periodSeconds: 15
   failureThreshold: 10
