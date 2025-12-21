@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/order-service
-  tag: "a6c47ac430493796161767f4962faa8b78b463ee"  # Updated by CI
+  tag: "a6c47ac430493796161767f4962faa8b78b463ee"
   pullPolicy: IfNotPresent
 
 service:
@@ -11,7 +11,7 @@ service:
 
 resources:
   requests:
-    cpu: 200m      # Increased slightly (Spring Boot can be hungry)
+    cpu: 200m
     memory: 256Mi
   limits:
     cpu: 500m
@@ -20,7 +20,7 @@ resources:
 readinessProbe:
   httpGet:
     path: /health
-    port: 8080   # Critical: add port
+    port: 8080
   initialDelaySeconds: 30
   periodSeconds: 10
   failureThreshold: 6
@@ -28,20 +28,24 @@ readinessProbe:
 livenessProbe:
   httpGet:
     path: /health
-    port: 8080   # Critical: add port
+    port: 8080
   initialDelaySeconds: 60
   periodSeconds: 10
   failureThreshold: 10
 
-# Environment variables for Spring Boot (from your local .env)
+# Critical: These env vars fix the Hibernate "Unable to determine Dialect" crash
 env:
   - name: SPRING_DATASOURCE_URL
-    value: jdbc:mysql://mysql.dev.svc.cluster.local:3306/leninkart?useSSL=false&allowPublicKeyRetrieval=true
+    value: "jdbc:mysql://mysql.dev.svc.cluster.local:3306/leninkart?useSSL=false&allowPublicKeyRetrieval=true"
   - name: SPRING_DATASOURCE_USERNAME
-    value: root
+    value: "root"
   - name: SPRING_DATASOURCE_PASSWORD
-    value: root123  # Change to secret in prod!
+    value: "root123"           # Change this to a secret later
+  - name: SPRING_DATASOURCE_DRIVER_CLASS_NAME
+    value: "com.mysql.cj.jdbc.Driver"
+  - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+    value: "update"            # Creates/updates tables automatically
   - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-    value: kafka.dev.svc.cluster.local:9092
+    value: "kafka.dev.svc.cluster.local:9092"
   - name: SERVER_PORT
     value: "8080"
