@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: frontend-dev
-  namespace: argocd
+  namespace: argocd  # <-- Fixed: "argocd" (with 'c')
 spec:
   project: leninkart
   source:
