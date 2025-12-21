@@ -1,7 +1,7 @@
 replicaCount: 1
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/order-service
-  tag: ""
+  tag: "dev-11-277b8ee"
   pullPolicy: IfNotPresent
 service:
   type: ClusterIP
