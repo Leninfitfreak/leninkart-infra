@@ -1,7 +1,11 @@
 replicaCount: 1
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/order-service
+<<<<<<< HEAD
   tag: will-be-overwritten-by-ci
+=======
+  tag: "a6c47ac430493796161767f4962faa8b78b463ee"
+>>>>>>> 38b5217418ed81bdd109e7e8b9feacd131b7679d
   pullPolicy: IfNotPresent
 service:
   type: ClusterIP

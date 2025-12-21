@@ -1,21 +1,4 @@
+replicaCount: 1
+
 image:
-  tag: will-be-overwritten-by-ci
-  repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/product-service
-service:
-  type: ClusterIP
-  port: 8080
-containerPort: 8080
-readinessProbe:
-  httpGet:
-    path: /actuator/health
-    port: 8080
-  initialDelaySeconds: 45
-  periodSeconds: 10
-  failureThreshold: 6
-livenessProbe:
-  httpGet:
-    path: /actuator/health
-    port: 8080
-  initialDelaySeconds: 90
-  periodSeconds: 15
-  failureThreshold: 10
+  tag: dev-latest
