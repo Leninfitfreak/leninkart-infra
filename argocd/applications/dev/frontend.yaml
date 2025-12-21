@@ -6,9 +6,12 @@ metadata:
 spec:
   project: leninkart
   source:
-    repoURL: https://github.com/Leninfitfreak/leninkart-infra
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git  # Add .git if missing (good practice)
     targetRevision: dev
     path: helm/frontend
+    helm:
+      valueFiles:
+        - values-dev.yaml   # <-- This loads your correct values
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
@@ -16,3 +19,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true  # Optional: auto-create namespace if missing
