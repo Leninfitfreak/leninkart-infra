@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/frontend
-  tag: dev-ec43b5e        # CI updates ONLY this
+  tag: dev-ec43b5e          # Updated by CI
   pullPolicy: IfNotPresent
 
 service:
@@ -17,13 +17,22 @@ resources:
     cpu: 300m
     memory: 256Mi
 
+# Add startupProbe for initial boot (prevents premature liveness failure)
+startupProbe:
+  httpGet:
+    path: /health
+    port: 80
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  failureThreshold: 30  # ~5 minutes grace period
+
 readinessProbe:
   httpGet:
     path: /health
     port: 80
   initialDelaySeconds: 30
   periodSeconds: 10
-  failureThreshold: 3
+  failureThreshold: 6
 
 livenessProbe:
   httpGet:
@@ -31,4 +40,9 @@ livenessProbe:
     port: 80
   initialDelaySeconds: 60
   periodSeconds: 10
-  failureThreshold: 6
+  failureThreshold: 10
+
+# Optional: Add env if frontend needs API URLs
+# env:
+#   - name: REACT_APP_API_BASE_URL
+#     value: "http://dev-order-service.dev.svc.cluster.local:8080"

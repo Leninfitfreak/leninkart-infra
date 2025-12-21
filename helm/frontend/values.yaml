@@ -1,13 +1,13 @@
 replicaCount: 1
 
 image:
-  repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/product-service
+  repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/frontend
   pullPolicy: IfNotPresent
   tag: latest
 
 service:
   type: ClusterIP
-  port: 8080
+  port: 80
 
 resources:
   requests:
@@ -20,7 +20,7 @@ resources:
 readinessProbe:
   httpGet:
     path: /health
-    port: 8080
+    port: 80
   initialDelaySeconds: 30
   periodSeconds: 10
   failureThreshold: 3
@@ -28,7 +28,7 @@ readinessProbe:
 livenessProbe:
   httpGet:
     path: /health
-    port: 8080
+    port: 80
   initialDelaySeconds: 60
   periodSeconds: 10
   failureThreshold: 6
