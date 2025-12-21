@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/order-service
-  tag: dev-latest
+  tag: "a6c47ac430493796161767f4962faa8b78b463ee"
   pullPolicy: IfNotPresent
 
 service:
