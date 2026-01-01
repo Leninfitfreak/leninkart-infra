@@ -5,18 +5,16 @@ metadata:
   namespace: argocd
 spec:
   description: LeninKart GitOps Project
-
   sourceRepos:
-    - https://github.com/Leninfitfreak/leninkart-infra
-
+    - https://github.com/Leninfitfreak/leninkart-infra.git  # Your infra repo
+    - https://charts.bitnami.com/bitnami                   # ADD THIS: Allows MySQL, Kafka, etc.
+    - '*'                                                   # OPTIONAL: Allows any repo (useful for dev/testing)
   destinations:
     - namespace: '*'
       server: https://kubernetes.default.svc
-
   clusterResourceWhitelist:
     - group: '*'
       kind: '*'
-
   namespaceResourceWhitelist:
     - group: '*'
       kind: '*'
