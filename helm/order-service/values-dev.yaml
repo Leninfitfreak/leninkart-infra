@@ -41,13 +41,13 @@ livenessProbe:
   periodSeconds: 10
   failureThreshold: 10
 
-env:
+eenv:
   - name: SPRING_DATASOURCE_URL
-    value: "jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkartdb"  # DB name from docker-compose
+    value: "jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart"
   - name: SPRING_DATASOURCE_USERNAME
     value: "postgres"
   - name: SPRING_DATASOURCE_PASSWORD
-    value: "postgres"  # Password from docker-compose
+    value: "root123"
   - name: SPRING_DATASOURCE_DRIVER_CLASS_NAME
     value: "org.postgresql.Driver"
   - name: SPRING_JPA_HIBERNATE_DDL_AUTO
