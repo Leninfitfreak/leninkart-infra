@@ -46,3 +46,5 @@ env:
     value: "org.postgresql.Driver"
   - name: SPRING_JPA_HIBERNATE_DDL_AUTO
     value: "update"
+  - name: SERVER_PORT
+    value: "8080"
