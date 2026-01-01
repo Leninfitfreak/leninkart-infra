@@ -4,7 +4,7 @@ metadata:
   name: dev-postgresql
   namespace: argocd
 spec:
-  project: leninkart
+  project: default
   source:
     repoURL: oci://registry-1.docker.io/bitnamicharts
     chart: postgresql
