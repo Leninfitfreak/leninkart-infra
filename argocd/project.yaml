@@ -6,9 +6,9 @@ metadata:
 spec:
   description: LeninKart GitOps Project
   sourceRepos:
-    - https://github.com/Leninfitfreak/leninkart-infra.git  # Your infra repo
-    - https://charts.bitnami.com/bitnami                   # ADD THIS: Allows MySQL, Kafka, etc.
-    - '*'                                                   # OPTIONAL: Allows any repo (useful for dev/testing)
+    - https://github.com/Leninfitfreak/leninkart-infra.git
+    - https://charts.bitnami.com/bitnami  # This allows MySQL and Kafka charts
+    - '*'                                 # Wildcard: allows any Helm repo (safe for dev)
   destinations:
     - namespace: '*'
       server: https://kubernetes.default.svc
