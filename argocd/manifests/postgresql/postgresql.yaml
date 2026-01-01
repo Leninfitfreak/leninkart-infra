@@ -7,8 +7,6 @@ spec:
     app: postgres
   ports:
     - port: 5432
-      targetPort: 5432
-  type: ClusterIP
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -27,7 +25,7 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: asia-south1-docker.pkg.dev/leninkart-478305/leninkart-db/postgres:16  # Your own pushed image
+          image: asia-south1-docker.pkg.dev/leninkart-478305/leninkart-db/postgres:16
           env:
             - name: POSTGRES_DB
               value: leninkart
@@ -37,14 +35,6 @@ spec:
               value: root123
           ports:
             - containerPort: 5432
-          volumeMounts:
-            - name: data
-              mountPath: /var/lib/postgresql/data
-      # Optional initContainer to fix "lost+found" issue on some storage
-      initContainers:
-        - name: fix-lostfound
-          image: busybox
-          command: ['sh', '-c', 'rm -rf /var/lib/postgresql/data/lost+found || true']
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
