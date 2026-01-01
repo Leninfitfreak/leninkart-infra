@@ -1,38 +1,50 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Application
+apiVersion: v1
+kind: Service
 metadata:
-  name: dev-postgresql
-  namespace: argocd
+  name: postgres
 spec:
-  project: default
-  source:
-    repoURL: https://charts.bitnami.com/bitnami  # Traditional HTTP repo - works perfectly
-    chart: postgresql
-    targetRevision: 15.5.0
-    helm:
-      values: |
-        architecture: standalone
-        auth:
-          postgresPassword: root123
-          database: leninkart
-        primary:
-          nameOverride: postgres
-          persistence:
-            enabled: true
-            size: 8Gi
-          resources:
-            requests:
-              cpu: 200m
-              memory: 512Mi
-            limits:
-              cpu: 500m
-              memory: 1Gi
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: dev
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: asia-south1-docker.pkg.dev/leninkart-478305/leninkart-db/postgres:16  # Your own image!
+          env:
+            - name: POSTGRES_DB
+              value: leninkart
+            - name: POSTGRES_PASSWORD
+              value: root123
+            - name: POSTGRES_USER
+              value: postgres
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 8Gi
