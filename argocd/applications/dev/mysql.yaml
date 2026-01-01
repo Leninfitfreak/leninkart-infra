@@ -19,9 +19,9 @@ spec:
         primary:
           nameOverride: mysql
           image:
-            registry: registry.k8s.io
-            repository: bitnami/mysql
-            tag: 8.0.35-debian-11-r44  # Reliable Google mirror tag - fixes ImagePullBackOff on GKE
+            registry: docker.io
+            repository: bitnamilegacy/mysql  # Legacy repo for free images
+            tag: 8.0.35-debian-11-r0  # A stable legacy tag (adjust if needed)
             pullPolicy: IfNotPresent
           persistence:
             enabled: true
