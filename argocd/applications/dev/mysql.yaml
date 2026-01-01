@@ -20,8 +20,8 @@ spec:
           nameOverride: mysql
           image:
             registry: docker.io
-            repository: bitnamilegacy/mysql  # Legacy repo for free images
-            tag: 8.0.35-debian-11-r0  # A stable legacy tag (adjust if needed)
+            repository: bitnamilegacy/mysql
+            tag: 8.0.35-debian-11-r0  # Known good legacy tag from Bitnami legacy repo
             pullPolicy: IfNotPresent
           persistence:
             enabled: true
