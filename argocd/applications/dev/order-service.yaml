@@ -1,17 +1,32 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: dev-order-service
+  name: dev-postgresql
   namespace: argocd
 spec:
   project: leninkart
   source:
-    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
-    targetRevision: dev
-    path: helm/order-service
+    repoURL: oci://registry-1.docker.io/bitnamicharts
+    chart: postgresql
+    targetRevision: 15.5.0
     helm:
-      valueFiles:
-        - values-dev.yaml
+      values: |
+        architecture: standalone
+        auth:
+          postgresPassword: root123
+          database: leninkart
+        primary:
+          nameOverride: postgres
+          persistence:
+            enabled: true
+            size: 8Gi
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
