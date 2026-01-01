@@ -1,18 +1,18 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: leninkart-root # Root app name – clear and unique
+  name: leninkart-root
   namespace: argocd
   finalizers:
-    - resources-finalizer.argocd.argoproj.io # Ensures clean deletion of child apps
+    - resources-finalizer.argocd.argoproj.io
 spec:
-  project: default  # <-- CHANGED TO default (built-in project, allows all repos including Bitnami)
+  project: default  # Allows all repos, no permission issues
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
-    targetRevision: dev # Change to main/staging/prod as needed for different roots
-    path: argocd/applications/dev # Points to folder with child apps
+    targetRevision: dev
+    path: argocd/applications/dev
     directory:
-      recurse: true # Includes all YAML files in subdirs if needed
+      recurse: true
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
