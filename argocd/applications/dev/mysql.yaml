@@ -1,23 +1,22 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: dev-mysql
+  name: dev-postgresql
   namespace: argocd
 spec:
   project: leninkart
   source:
-    repoURL: oci://registry-1.docker.io/bitnamicharts  # OCI format - new Bitnami standard
-    chart: mysql
-    targetRevision: 9.10.8  # Or latest stable
+    repoURL: oci://registry-1.docker.io/bitnamicharts  # New OCI format for Bitnami 2026
+    chart: postgresql
+    targetRevision: 15.5.0  # Latest stable as of 2026
     helm:
       values: |
         architecture: standalone
         auth:
-          rootPassword: root123
+          postgresPassword: root123  # Change in prod!
           database: leninkart
-          createDatabase: true
         primary:
-          nameOverride: mysql
+          nameOverride: postgres
           persistence:
             enabled: true
             size: 8Gi
@@ -28,8 +27,6 @@ spec:
             limits:
               cpu: 500m
               memory: 1Gi
-        secondary:
-          replicaCount: 0
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
