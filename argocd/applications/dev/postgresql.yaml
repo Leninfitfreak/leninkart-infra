@@ -6,27 +6,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: oci://registry-1.docker.io/bitnamicharts
-    chart: postgresql
-    targetRevision: 15.5.0
-    helm:
-      values: |
-        architecture: standalone
-        auth:
-          postgresPassword: root123
-          database: leninkart
-        primary:
-          nameOverride: postgres
-          persistence:
-            enabled: true
-            size: 8Gi
-          resources:
-            requests:
-              cpu: 200m
-              memory: 512Mi
-            limits:
-              cpu: 500m
-              memory: 1Gi
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: argocd/manifests/postgresql
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
