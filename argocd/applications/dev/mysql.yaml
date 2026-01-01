@@ -4,7 +4,7 @@ metadata:
   name: dev-mysql
   namespace: argocd
 spec:
-  project: leninkart
+  project: default  # <-- CHANGE THIS LINE FROM leninkart TO default
   source:
     repoURL: https://charts.bitnami.com/bitnami
     chart: mysql
@@ -13,11 +13,11 @@ spec:
       values: |
         architecture: standalone
         auth:
-          rootPassword: root123            # Change this in production (use Secret)
+          rootPassword: root123
           database: leninkart
           createDatabase: true
         primary:
-          nameOverride: mysql              # Forces service name to "mysql" instead of "dev-mysql"
+          nameOverride: mysql
           persistence:
             enabled: true
             size: 8Gi
