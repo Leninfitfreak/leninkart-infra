@@ -6,19 +6,19 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io # Ensures clean deletion of child apps
 spec:
-  project: default  # CHANGED TO default - built-in project that allows all repos
+  project: default  # <-- CHANGED TO default (built-in project, allows all repos including Bitnami)
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: dev # Change to main/staging/prod as needed for different roots
-    path: argocd/applications/dev # Points to folder with child apps (e.g., dev-frontend.yaml, order-dev.yaml)
+    path: argocd/applications/dev # Points to folder with child apps
     directory:
       recurse: true # Includes all YAML files in subdirs if needed
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd # Child apps deploy to their own namespaces
+    namespace: argocd
   syncPolicy:
     automated:
-      prune: true # Auto-delete removed child apps
-      selfHeal: true # Auto-fix drift
+      prune: true
+      selfHeal: true
     syncOptions:
       - CreateNamespace=true
