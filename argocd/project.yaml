@@ -1,20 +1,21 @@
 apiVersion: argoproj.io/v1alpha1
-kind: Application
+kind: AppProject
 metadata:
-  name: leninkart-root
+  name: leninkart
   namespace: argocd
 spec:
-  project: default  # CHANGE FROM leninkart TO default
-  source:
-    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
-    targetRevision: dev
-    path: argocd/applications/dev  # or whatever path has your child apps
-    directory:
-      recurse: true
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: argocd
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+  description: LeninKart GitOps Project
+  # Allow your infra repo + Bitnami charts + wildcard for flexibility in dev
+  sourceRepos:
+    - https://github.com/Leninfitfreak/leninkart-infra.git
+    - https://charts.bitnami.com/bitnami
+    - '*'                                   # Allows any Helm repo (safe & convenient for dev)
+  destinations:
+    - namespace: '*'
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
