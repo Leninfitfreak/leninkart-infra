@@ -1,50 +1,20 @@
-apiVersion: v1
-kind: Service
+apiVersion: argoproj.io/v1alpha1
+kind: Application
 metadata:
-  name: postgres
+  name: dev-postgresql
+  namespace: argocd
 spec:
-  selector:
-    app: postgres
-  ports:
-    - port: 5432
-      targetPort: 5432
-  type: ClusterIP
----
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: postgres
-spec:
-  serviceName: postgres
-  replicas: 1
-  selector:
-    matchLabels:
-      app: postgres
-  template:
-    metadata:
-      labels:
-        app: postgres
-    spec:
-      containers:
-        - name: postgres
-          image: asia-south1-docker.pkg.dev/leninkart-478305/leninkart-db/postgres:16  # Your own image!
-          env:
-            - name: POSTGRES_DB
-              value: leninkart
-            - name: POSTGRES_PASSWORD
-              value: root123
-            - name: POSTGRES_USER
-              value: postgres
-          ports:
-            - containerPort: 5432
-          volumeMounts:
-            - name: data
-              mountPath: /var/lib/postgresql/data
-  volumeClaimTemplates:
-    - metadata:
-        name: data
-      spec:
-        accessModes: ["ReadWriteOnce"]
-        resources:
-          requests:
-            storage: 8Gi
+  project: default
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: argocd/manifests/postgresql
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
