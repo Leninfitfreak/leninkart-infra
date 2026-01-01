@@ -6,14 +6,14 @@ metadata:
 spec:
   project: leninkart
   source:
-    repoURL: oci://registry-1.docker.io/bitnamicharts  # New OCI format for Bitnami 2026
+    repoURL: oci://registry-1.docker.io/bitnamicharts
     chart: postgresql
-    targetRevision: 15.5.0  # Latest stable as of 2026
+    targetRevision: 15.5.0
     helm:
       values: |
         architecture: standalone
         auth:
-          postgresPassword: root123  # Change in prod!
+          postgresPassword: root123
           database: leninkart
         primary:
           nameOverride: postgres
