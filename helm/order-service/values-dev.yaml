@@ -43,7 +43,7 @@ livenessProbe:
 
 env:
   - name: SPRING_DATASOURCE_URL
-    value: "jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart"  # Update when PostgreSQL deployed
+    value: "jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart"
   - name: SPRING_DATASOURCE_USERNAME
     value: "postgres"
   - name: SPRING_DATASOURCE_PASSWORD
@@ -52,5 +52,3 @@ env:
     value: "org.postgresql.Driver"
   - name: SPRING_JPA_HIBERNATE_DDL_AUTO
     value: "update"
-  - name: SERVER_PORT
-    value: "8080"
