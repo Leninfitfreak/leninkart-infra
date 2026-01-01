@@ -20,8 +20,8 @@ spec:
           nameOverride: mysql
           image:
             registry: registry.k8s.io
-            repository: bitnami/mysql  # Google's mirror of Bitnami MySQL
-            tag: 8.0.35-debian-11-r44  # Stable tag
+            repository: bitnami/mysql
+            tag: 8.0.35-debian-11-r44  # Reliable Google mirror tag - fixes ImagePullBackOff on GKE
             pullPolicy: IfNotPresent
           persistence:
             enabled: true
