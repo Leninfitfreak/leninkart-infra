@@ -4,11 +4,11 @@ metadata:
   name: leninkart-root
   namespace: argocd
 spec:
-  project: default  # or leninkart if self-referencing carefully
+  project: default  # CHANGE FROM leninkart TO default
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: dev
-    path: argocd  # This path must contain project.yaml and applications/dev/*
+    path: argocd/applications/dev  # or whatever path has your child apps
     directory:
       recurse: true
   destination:
