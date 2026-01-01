@@ -1,11 +1,14 @@
 replicaCount: 1
+
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/order-service
-  tag: "dev-15-99b8ffb"
+  tag: "dev-15-99b8ffb"  # Updated by CI
   pullPolicy: IfNotPresent
+
 service:
   type: ClusterIP
   port: 8080
+
 resources:
   requests:
     cpu: 100m
@@ -13,6 +16,15 @@ resources:
   limits:
     cpu: 300m
     memory: 256Mi
+
+startupProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  failureThreshold: 30  # ~5 min grace for DB connection
+
 readinessProbe:
   httpGet:
     path: /health
@@ -20,6 +32,7 @@ readinessProbe:
   initialDelaySeconds: 30
   periodSeconds: 10
   failureThreshold: 6
+
 livenessProbe:
   httpGet:
     path: /health
@@ -27,3 +40,17 @@ livenessProbe:
   initialDelaySeconds: 60
   periodSeconds: 10
   failureThreshold: 10
+
+env:
+  - name: SPRING_DATASOURCE_URL
+    value: "jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart"  # Update when PostgreSQL deployed
+  - name: SPRING_DATASOURCE_USERNAME
+    value: "postgres"
+  - name: SPRING_DATASOURCE_PASSWORD
+    value: "root123"
+  - name: SPRING_DATASOURCE_DRIVER_CLASS_NAME
+    value: "org.postgresql.Driver"
+  - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+    value: "update"
+  - name: SERVER_PORT
+    value: "8080"
