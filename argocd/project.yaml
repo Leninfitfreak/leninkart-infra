@@ -1,20 +1,20 @@
 apiVersion: argoproj.io/v1alpha1
-kind: AppProject
+kind: Application
 metadata:
-  name: leninkart
+  name: leninkart-root
   namespace: argocd
 spec:
-  description: LeninKart GitOps Project
-  sourceRepos:
-    - https://github.com/Leninfitfreak/leninkart-infra.git
-    - https://charts.bitnami.com/bitnami  # This allows MySQL and Kafka charts
-    - '*'                                 # Wildcard: allows any Helm repo (safe for dev)
-  destinations:
-    - namespace: '*'
-      server: https://kubernetes.default.svc
-  clusterResourceWhitelist:
-    - group: '*'
-      kind: '*'
-  namespaceResourceWhitelist:
-    - group: '*'
-      kind: '*'
+  project: default  # or leninkart if self-referencing carefully
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: argocd  # This path must contain project.yaml and applications/dev/*
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
