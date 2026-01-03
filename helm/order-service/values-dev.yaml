@@ -41,7 +41,7 @@ livenessProbe:
   periodSeconds: 10
   failureThreshold: 10
 
-eenv:
+env:
   - name: SPRING_DATASOURCE_URL
     value: "jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart"
   - name: SPRING_DATASOURCE_USERNAME
@@ -52,5 +52,3 @@ eenv:
     value: "org.postgresql.Driver"
   - name: SPRING_JPA_HIBERNATE_DDL_AUTO
     value: "update"
-  - name: SERVER_PORT
-    value: "8080"
