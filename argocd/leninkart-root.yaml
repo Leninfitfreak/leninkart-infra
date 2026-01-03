@@ -6,7 +6,7 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
-  project: default  # Allows all repos, no permission issues
+  project: leninkart  # <-- CHANGE TO leninkart (your permissive project)
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: dev
