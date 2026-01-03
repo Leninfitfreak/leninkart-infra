@@ -43,12 +43,14 @@ livenessProbe:
 
 env:
   - name: SPRING_DATASOURCE_URL
-    value: "jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart"
+    value: "jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkartdb"  # DB name from docker-compose
   - name: SPRING_DATASOURCE_USERNAME
     value: "postgres"
   - name: SPRING_DATASOURCE_PASSWORD
-    value: "root123"
+    value: "postgres"  # Password from docker-compose
   - name: SPRING_DATASOURCE_DRIVER_CLASS_NAME
     value: "org.postgresql.Driver"
   - name: SPRING_JPA_HIBERNATE_DDL_AUTO
     value: "update"
+  - name: SERVER_PORT
+    value: "8080"
