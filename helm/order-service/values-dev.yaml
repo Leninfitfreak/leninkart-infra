@@ -1,7 +1,7 @@
 replicaCount: 1
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/order-service
-  tag: "dev-21-" # Updated by CI
+  tag: "dev-23-" # Updated by CI
   pullPolicy: IfNotPresent
 service:
   type: ClusterIP
@@ -34,7 +34,6 @@ livenessProbe:
   initialDelaySeconds: 60
   periodSeconds: 10
   failureThreshold: 10
-
 env:
   - name: SPRING_DATASOURCE_URL
     value: "jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart"
