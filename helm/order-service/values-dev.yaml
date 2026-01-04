@@ -1,14 +1,11 @@
 replicaCount: 1
-
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/order-service
-  tag: dev-28-  # Updated by CI workflow — will be replaced with actual tag
+  tag: dev-29- # Updated by CI workflow — will be replaced with actual tag
   pullPolicy: IfNotPresent
-
 service:
   type: ClusterIP
   port: 8080
-
 resources:
   requests:
     cpu: 100m
@@ -16,7 +13,6 @@ resources:
   limits:
     cpu: 300m
     memory: 256Mi
-
 startupProbe:
   httpGet:
     path: /actuator/health  # <-- Change to actuator health
@@ -24,7 +20,6 @@ startupProbe:
   initialDelaySeconds: 60
   periodSeconds: 10
   failureThreshold: 30
-
 readinessProbe:
   httpGet:
     path: /actuator/health  # <-- Change to actuator health
@@ -32,7 +27,6 @@ readinessProbe:
   initialDelaySeconds: 60
   periodSeconds: 10
   failureThreshold: 6
-
 livenessProbe:
   httpGet:
     path: /actuator/health  # <-- Change to actuator health
@@ -40,7 +34,6 @@ livenessProbe:
   initialDelaySeconds: 120
   periodSeconds: 10
   failureThreshold: 10
-
 env:
   - name: SPRING_DATASOURCE_URL
     value: "jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart"
@@ -55,6 +48,6 @@ env:
   - name: SERVER_PORT
     value: "8080"
   - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-    value: "dev-kafka.dev.svc.cluster.local:9092"  # Correct Kafka service name
+    value: "dev-kafka.dev.svc.cluster.local:9092" # Correct Kafka service name
   - name: SPRING_KAFKA_LISTENER_AUTO_STARTUP
-    value: "false"  # <-- DEV ONLY: Prevents crash if Kafka is slow/not ready
+    value: "false" # <-- DEV ONLY: Prevents crash if Kafka is slow/not ready
