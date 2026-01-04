@@ -19,27 +19,27 @@ resources:
 
 startupProbe:
   httpGet:
-    path: /health
+    path: /actuator/health
     port: 8080
-  initialDelaySeconds: 120  # <-- Very high — app has plenty of time
+  initialDelaySeconds: 60
   periodSeconds: 10
   failureThreshold: 30
 
 readinessProbe:
   httpGet:
-    path: /health
+    path: /actuator/health
     port: 8080
-  initialDelaySeconds: 120  # <-- High
+  initialDelaySeconds: 60
   periodSeconds: 10
-  failureThreshold: 12
+  failureThreshold: 6
 
 livenessProbe:
   httpGet:
-    path: /health
+    path: /actuator/health
     port: 8080
-  initialDelaySeconds: 180  # <-- Even higher after ready
-  periodSeconds: 30
-  failureThreshold: 6
+  initialDelaySeconds: 120
+  periodSeconds: 10
+  failureThreshold: 10
 
 env:
   - name: SPRING_DATASOURCE_URL
