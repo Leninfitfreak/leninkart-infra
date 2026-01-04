@@ -21,7 +21,7 @@ startupProbe:
   httpGet:
     path: /health
     port: 8080
-  initialDelaySeconds: 60  # <-- Increase (app takes ~50s to start)
+  initialDelaySeconds: 120  # <-- Very high — app has plenty of time
   periodSeconds: 10
   failureThreshold: 30
 
@@ -29,17 +29,17 @@ readinessProbe:
   httpGet:
     path: /health
     port: 8080
-  initialDelaySeconds: 60  # <-- Increase
+  initialDelaySeconds: 120  # <-- High
   periodSeconds: 10
-  failureThreshold: 10  # <-- More forgiving
+  failureThreshold: 12
 
 livenessProbe:
   httpGet:
     path: /health
     port: 8080
-  initialDelaySeconds: 120  # <-- Give time after ready
+  initialDelaySeconds: 180  # <-- Even higher after ready
   periodSeconds: 30
-  failureThreshold: 5
+  failureThreshold: 6
 
 env:
   - name: SPRING_DATASOURCE_URL
