@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/order-service
-  tag: dev-28-  # Known good existing tag (fixes ImagePullBackOff)
+  tag: dev-29-  # Known good existing tag (fixes ImagePullBackOff)
   pullPolicy: IfNotPresent
 
 service:
