@@ -4,7 +4,7 @@ metadata:
   name: order-service
 spec:
   selector:
-    app.kubernetes.io/name: order-service
+    app: order-service
   type: {{ .Values.service.type }}
   ports:
     - port: {{ .Values.service.port }}
