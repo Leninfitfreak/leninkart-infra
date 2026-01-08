@@ -1,17 +1,14 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: dev-order-service
+  name: dev-postgresql
   namespace: argocd
 spec:
-  project: leninkart
+  project: default
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: dev
-    path: helm/order-service
-    helm:
-      valueFiles:
-        - values-dev.yaml
+    path: argocd/manifests/postgresql
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
@@ -19,3 +16,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

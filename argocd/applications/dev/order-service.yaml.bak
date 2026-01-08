@@ -16,9 +16,17 @@ spec:
           postgresPassword: root123
           database: leninkart
         primary:
+          nameOverride: postgres
           persistence:
             enabled: true
             size: 8Gi
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
@@ -26,3 +34,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
