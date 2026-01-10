@@ -1,80 +1,54 @@
-import yaml
-import shutil
-from pathlib import Path
+import os
+import argparse
 
-KAFKA_IMAGE = "confluentinc/cp-kafka"
-KAFKA_TAG = "7.6.0"
+def dump_project_to_file(root_dir='.', output_file='project_dump.txt', ignore_dirs=None, ignore_files=None):
+    if ignore_dirs is None:
+        ignore_dirs = {'.git', '__pycache__', '.idea', '.vscode', 'node_modules', 'build', 'dist', '.gradle'}
+    if ignore_files is None:
+        ignore_files = {'.DS_Store', 'Thumbs.db'}
 
-ZK_IMAGE = "confluentinc/cp-zookeeper"
-ZK_TAG = "7.6.0"
+    with open(output_file, 'w', encoding='utf-8') as outfile:
+        outfile.write(f"# Project Dump - Root: {os.path.abspath(root_dir)}\n\n")
 
+        for current_dir, dirs, files in os.walk(root_dir):
+            # Skip ignored directories (in-place modification)
+            dirs[:] = [d for d in dirs if d not in ignore_dirs]
 
-def backup(path: Path):
-    bak = path.with_suffix(path.suffix + ".bak")
-    shutil.copy(path, bak)
-    print(f"✔ Backup created: {bak}")
+            relative_dir = os.path.relpath(current_dir, root_dir)
+            if relative_dir != '.':
+                outfile.write(f"### DIRECTORY: {relative_dir}/\n\n")
 
+            for file_name in sorted(files):
+                if file_name in ignore_files:
+                    continue
 
-def update(obj):
-    if isinstance(obj, dict):
-        # Helm-style image block
-        if "image" in obj and isinstance(obj["image"], dict):
-            repo = obj["image"].get("repository", "")
-            if "kafka" in repo:
-                obj["image"]["repository"] = KAFKA_IMAGE
-                obj["image"]["tag"] = KAFKA_TAG
-                obj["image"]["pullPolicy"] = "IfNotPresent"
+                file_path = os.path.join(current_dir, file_name)
+                relative_path = os.path.relpath(file_path, root_dir)
 
-            if "zookeeper" in repo:
-                obj["image"]["repository"] = ZK_IMAGE
-                obj["image"]["tag"] = ZK_TAG
-                obj["image"]["pullPolicy"] = "IfNotPresent"
+                outfile.write(f"### FILE: {relative_path}\n")
+                outfile.write("```\n")
 
-        # Pod spec
-        if "containers" in obj:
-            for c in obj["containers"]:
-                img = c.get("image", "")
-                if "kafka" in img:
-                    c["image"] = f"{KAFKA_IMAGE}:{KAFKA_TAG}"
-                    c["imagePullPolicy"] = "IfNotPresent"
-                if "zookeeper" in img:
-                    c["image"] = f"{ZK_IMAGE}:{ZK_TAG}"
-                    c["imagePullPolicy"] = "IfNotPresent"
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    outfile.write(content.rstrip() + "\n")  # Ensure trailing newline
+                except UnicodeDecodeError:
+                    outfile.write("<BINARY OR NON-UTF8 FILE - CONTENT SKIPPED>\n")
+                except PermissionError:
+                    outfile.write("<PERMISSION DENIED - CONTENT SKIPPED>\n")
+                except Exception as e:
+                    outfile.write(f"<ERROR READING FILE: {str(e)}>\n")
 
-        for v in obj.values():
-            update(v)
+                outfile.write("```\n\n")
 
-    elif isinstance(obj, list):
-        for i in obj:
-            update(i)
-
-
-def main():
-    files = [
-        p for p in Path(".").rglob("*.yaml")
-        if "kafka" in p.name.lower() or "zookeeper" in p.name.lower()
-    ]
-
-    if not files:
-        print("❌ No Kafka/Zookeeper YAML files found")
-        return
-
-    for f in files:
-        print(f"\n🔧 Updating: {f}")
-        backup(f)
-
-        with open(f) as fh:
-            data = yaml.safe_load(fh)
-
-        update(data)
-
-        with open(f, "w") as fh:
-            yaml.safe_dump(data, fh, sort_keys=False)
-
-        print("✅ Updated")
-
-    print("\n🎉 Kafka image update complete (Confluent, Docker Hub)")
-
+    print(f"Project dump completed! File saved as '{output_file}' in the current directory.")
+    print("Share the content of this file with me — I'll analyze every line and fix LeninKart!")
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Dump entire project file structure and content to a single text file")
+    parser.add_argument('-o', '--output', default='project_dump.txt', help='Output file name (default: project_dump.txt)')
+    parser.add_argument('-r', '--root', default='.', help='Root directory to scan (default: current directory)')
+
+    args = parser.parse_args()
+
+    dump_project_to_file(root_dir=args.root, output_file=args.output)

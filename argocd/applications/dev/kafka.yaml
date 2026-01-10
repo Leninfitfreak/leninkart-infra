@@ -8,33 +8,21 @@ spec:
   source:
     repoURL: https://charts.bitnami.com/bitnami
     chart: kafka
-    targetRevision: 22.1.5
+    targetRevision: 26.9.0   # ✅ FIXED
     helm:
       values: |
         kraft:
           enabled: false
-
-        replicaCount: 1
-
-        persistence:
-          enabled: false
-
-        image:
-          registry: docker.io
-          repository: confluentinc/cp-kafka
-          tag: 7.6.0
-          pullPolicy: IfNotPresent
 
         zookeeper:
           enabled: true
           replicaCount: 1
           persistence:
             enabled: false
-          image:
-            registry: docker.io
-            repository: confluentinc/cp-zookeeper
-            tag: 7.6.0
-            pullPolicy: IfNotPresent
+
+        replicaCount: 1
+        persistence:
+          enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
