@@ -8,29 +8,22 @@ spec:
   source:
     repoURL: https://charts.bitnami.com/bitnami
     chart: kafka
-    targetRevision: 26.9.0  # Good stable version
+    targetRevision: 22.1.5   # 👈 VERY IMPORTANT
     helm:
       values: |
-        auth:
-          rootUser: "admin"          # Optional: set root password
-          rootPassword: "admin123"   # Change in prod!
-        replicaCount: 1              # 1 broker for dev (sufficient)
-        persistence:
-          enabled: true
-          size: 8Gi
+        kraft:
+          enabled: false
+
         zookeeper:
-          enabled: true              # Explicitly enable embedded Zookeeper
+          enabled: true
           replicaCount: 1
           persistence:
-            enabled: true
-            size: 8Gi
-        resources:
-          requests:
-            cpu: 200m
-            memory: 512Mi
-          limits:
-            cpu: 500m
-            memory: 1Gi
+            enabled: false
+
+        replicaCount: 1
+
+        persistence:
+          enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
@@ -38,5 +31,3 @@ spec:
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
