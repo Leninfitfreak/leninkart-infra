@@ -8,19 +8,16 @@ spec:
   source:
     repoURL: https://charts.bitnami.com/bitnami
     chart: kafka
-    targetRevision: 26.9.0   # <-- matches what Argo CD is using
+    targetRevision: 26.9.0
     helm:
       values: |
         kraft:
           enabled: false
 
         controller:
-          replicaCount: 0     # 👈 CRITICAL FIX
+          replicaCount: 0   # 🔥 THIS WAS MISSING
 
-        broker:
-          replicaCount: 1     # 👈 CRITICAL FIX
-          persistence:
-            enabled: false
+        replicaCount: 1     # Kafka broker
 
         zookeeper:
           enabled: true
