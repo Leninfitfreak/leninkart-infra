@@ -42,7 +42,7 @@ livenessProbe:
 env:
   - name: SPRING_DATASOURCE_URL
     value: jdbc:postgresql://postgres:5432/leninkart
-
+    
   - name: SPRING_DATASOURCE_USERNAME
     value: postgres
 
