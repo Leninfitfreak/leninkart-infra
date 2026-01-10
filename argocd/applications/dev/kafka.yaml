@@ -6,28 +6,9 @@ metadata:
 spec:
   project: leninkart
   source:
-    repoURL: https://charts.bitnami.com/bitnami
-    chart: kafka
-    targetRevision: 26.9.0
-    helm:
-      values: |
-        kraft:
-          enabled: false
-
-        controller:
-          replicaCount: 0
-
-        broker:
-          replicaCount: 1
-
-        zookeeper:
-          enabled: true
-          replicaCount: 1
-          persistence:
-            enabled: false
-
-        persistence:
-          enabled: false
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: k8s/kafka
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
