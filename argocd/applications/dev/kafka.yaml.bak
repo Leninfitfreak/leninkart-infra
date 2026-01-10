@@ -8,11 +8,22 @@ spec:
   source:
     repoURL: https://charts.bitnami.com/bitnami
     chart: kafka
-    targetRevision: 22.1.5
+    targetRevision: 22.1.5   # 👈 VERY IMPORTANT
     helm:
-      values: "kraft:\n  enabled: false\n\nzookeeper:\n  enabled: true\n  replicaCount:\
-        \ 1\n  persistence:\n    enabled: false\n\nreplicaCount: 1\n\npersistence:\n\
-        \  enabled: false\n"
+      values: |
+        kraft:
+          enabled: false
+
+        zookeeper:
+          enabled: true
+          replicaCount: 1
+          persistence:
+            enabled: false
+
+        replicaCount: 1
+
+        persistence:
+          enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
