@@ -5,8 +5,7 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   selector:
-    app.kubernetes.io/name: order-service
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    app: order-service
   ports:
     - port: {{ .Values.service.port }}
-      targetPort: http
+      targetPort: 8080

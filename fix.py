@@ -1,161 +1,101 @@
-import os
-import shutil
 from pathlib import Path
+import shutil
+import yaml
 
 ROOT = Path(".")
-ARGO_DEV = ROOT / "argocd" / "applications" / "dev"
-K8S_KAFKA = ROOT / "k8s" / "kafka"
+BACKUP = ROOT / ".backup_fix"
+BACKUP.mkdir(exist_ok=True)
 
-def remove_path(p: Path):
-    if p.exists():
-        print(f"Removing: {p}")
-        if p.is_dir():
-            shutil.rmtree(p)
-        else:
-            p.unlink()
+def backup(p):
+    shutil.copy(p, BACKUP / p.name)
 
-def cleanup():
-    # Remove broken Bitnami kafka apps
-    for f in ARGO_DEV.glob("kafka*.yaml"):
-        remove_path(f)
+def write(p, data):
+    with open(p, "w") as f:
+        yaml.safe_dump(data, f, sort_keys=False)
 
-    # Remove backup junk
-    for root, dirs, files in os.walk(ROOT):
-        for d in dirs:
-            if "backup" in d or d.startswith(".auto"):
-                remove_path(Path(root) / d)
-        for f in files:
-            if f.endswith(".bak"):
-                remove_path(Path(root) / f)
+print("\n🔧 LeninKart FINAL FIX (Confluent Kafka safe)\n")
 
-def ensure_dirs():
-    K8S_KAFKA.mkdir(parents=True, exist_ok=True)
+# -------------------------------------------------
+# 1️⃣ FIX order-service SERVICE SELECTOR
+# -------------------------------------------------
+svc = ROOT / "helm/order-service/templates/service.yaml"
+backup(svc)
 
-def write_file(path: Path, content: str):
-    print(f"Creating: {path}")
-    path.write_text(content.strip() + "\n")
+svc_yaml = {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {"name": "order-service"},
+    "spec": {
+        "type": "{{ .Values.service.type }}",
+        "selector": {
+            "app.kubernetes.io/name": "order-service",
+            "app.kubernetes.io/instance": "{{ .Release.Name }}"
+        },
+        "ports": [{
+            "port": "{{ .Values.service.port }}",
+            "targetPort": "http"
+        }]
+    }
+}
 
-def create_zookeeper():
-    write_file(
-        K8S_KAFKA / "zookeeper.yaml",
-        """
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: zookeeper
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: zookeeper
-  template:
-    metadata:
-      labels:
-        app: zookeeper
-    spec:
-      containers:
-      - name: zookeeper
-        image: confluentinc/cp-zookeeper:7.5.0
-        ports:
-        - containerPort: 2181
-        env:
-        - name: ZOOKEEPER_CLIENT_PORT
-          value: "2181"
-        - name: ZOOKEEPER_TICK_TIME
-          value: "2000"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: zookeeper
-spec:
-  selector:
-    app: zookeeper
-  ports:
-  - port: 2181
-"""
+with open(svc, "w") as f:
+    f.write(
+        "apiVersion: v1\n"
+        "kind: Service\n"
+        "metadata:\n"
+        "  name: order-service\n"
+        "spec:\n"
+        "  type: {{ .Values.service.type }}\n"
+        "  selector:\n"
+        "    app.kubernetes.io/name: order-service\n"
+        "    app.kubernetes.io/instance: {{ .Release.Name }}\n"
+        "  ports:\n"
+        "    - port: {{ .Values.service.port }}\n"
+        "      targetPort: http\n"
     )
 
-def create_kafka():
-    write_file(
-        K8S_KAFKA / "kafka.yaml",
-        """
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: kafka
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: kafka
-  template:
-    metadata:
-      labels:
-        app: kafka
-    spec:
-      containers:
-      - name: kafka
-        image: confluentinc/cp-kafka:7.5.0
-        ports:
-        - containerPort: 9092
-        env:
-        - name: KAFKA_BROKER_ID
-          value: "1"
-        - name: KAFKA_ZOOKEEPER_CONNECT
-          value: "zookeeper:2181"
-        - name: KAFKA_ADVERTISED_LISTENERS
-          value: "PLAINTEXT://kafka:9092"
-        - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
-          value: "PLAINTEXT:PLAINTEXT"
-        - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
-          value: "1"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: kafka
-spec:
-  selector:
-    app: kafka
-  ports:
-  - port: 9092
-"""
-    )
+print("✅ order-service Service selector fixed")
 
-def create_argocd_app():
-    write_file(
-        ARGO_DEV / "kafka.yaml",
-        """
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: dev-kafka
-  namespace: argocd
-spec:
-  project: leninkart
-  source:
-    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
-    targetRevision: dev
-    path: k8s/kafka
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: dev
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-"""
-    )
+# -------------------------------------------------
+# 2️⃣ FIX order-service VALUES (Postgres DNS)
+# -------------------------------------------------
+values = ROOT / "helm/order-service/values-dev.yaml"
+backup(values)
 
-def main():
-    print("=== Fixing Kafka (Confluent-based) ===")
-    cleanup()
-    ensure_dirs()
-    create_zookeeper()
-    create_kafka()
-    create_argocd_app()
-    print("✅ Kafka fixed using Confluent images")
+with open(values) as f:
+    v = yaml.safe_load(f)
 
-if __name__ == "__main__":
-    main()
+v["image"]["tag"] = str(v["image"]["tag"]).strip()
+v["env"]["SPRING_DATASOURCE_URL"] = \
+    "jdbc:postgresql://postgres-postgresql:5432/leninkart"
+
+write(values, v)
+print("✅ order-service Postgres hostname fixed")
+
+# -------------------------------------------------
+# 3️⃣ ADD KAFKA SERVICE (Confluent)
+# -------------------------------------------------
+kafka_svc = ROOT / "k8s/kafka/service.yaml"
+if not kafka_svc.exists():
+    kafka_service = {
+        "apiVersion": "v1",
+        "kind": "Service",
+        "metadata": {
+            "name": "kafka",
+            "namespace": "dev"
+        },
+        "spec": {
+            "selector": {
+                "app": "kafka"
+            },
+            "ports": [{
+                "port": 9092,
+                "targetPort": 9092
+            }]
+        }
+    }
+    write(kafka_svc, kafka_service)
+    print("✅ Kafka Service created (Confluent)")
+
+print("\n🎉 FIX COMPLETE — NO CONFUSION, NO EXTRA CHANGES")
+print("📦 Backup stored in .backup_fix/")
