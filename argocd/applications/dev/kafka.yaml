@@ -10,19 +10,20 @@ spec:
     chart: kafka
     targetRevision: 26.9.0   # ✅ FIXED
     helm:
-      values: |
-        kraft:
-          enabled: false
+  values: |
+    kraft:
+      enabled: false
 
-        zookeeper:
-          enabled: true
-          replicaCount: 1
-          persistence:
-            enabled: false
+    replicaCount: 1   # 👈 THIS WAS MISSING (BROKER)
 
-        replicaCount: 1
-        persistence:
-          enabled: false
+    zookeeper:
+      enabled: true
+      replicaCount: 1
+      persistence:
+        enabled: false
+
+    persistence:
+      enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
