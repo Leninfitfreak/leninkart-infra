@@ -1,101 +1,88 @@
-from pathlib import Path
+import os
 import shutil
 import yaml
+from datetime import datetime
 
-ROOT = Path(".")
-BACKUP = ROOT / ".backup_fix"
-BACKUP.mkdir(exist_ok=True)
+ROOT = os.getcwd()
+BACKUP_DIR = os.path.join(ROOT, f".backup_fix_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
 
-def backup(p):
-    shutil.copy(p, BACKUP / p.name)
+FILES_TO_FIX = [
+    "helm/order-service/values-dev.yaml",
+    "helm/product-service/values-dev.yaml",
+]
 
-def write(p, data):
-    with open(p, "w") as f:
-        yaml.safe_dump(data, f, sort_keys=False)
+def backup_file(path):
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    dst = os.path.join(BACKUP_DIR, path.replace("/", "_"))
+    shutil.copy2(path, dst)
 
-print("\n🔧 LeninKart FINAL FIX (Confluent Kafka safe)\n")
+def load_yaml(path):
+    with open(path, "r") as f:
+        return yaml.safe_load(f)
 
-# -------------------------------------------------
-# 1️⃣ FIX order-service SERVICE SELECTOR
-# -------------------------------------------------
-svc = ROOT / "helm/order-service/templates/service.yaml"
-backup(svc)
+def save_yaml(path, data):
+    with open(path, "w") as f:
+        yaml.dump(data, f, sort_keys=False)
 
-svc_yaml = {
-    "apiVersion": "v1",
-    "kind": "Service",
-    "metadata": {"name": "order-service"},
-    "spec": {
-        "type": "{{ .Values.service.type }}",
-        "selector": {
-            "app.kubernetes.io/name": "order-service",
-            "app.kubernetes.io/instance": "{{ .Release.Name }}"
-        },
-        "ports": [{
-            "port": "{{ .Values.service.port }}",
-            "targetPort": "http"
-        }]
-    }
-}
+def fix_order_service(values):
+    # Fix image tag
+    if "image" in values:
+        tag = values["image"].get("tag", "")
+        if tag.endswith("-"):
+            values["image"]["tag"] = tag.rstrip("-")
 
-with open(svc, "w") as f:
-    f.write(
-        "apiVersion: v1\n"
-        "kind: Service\n"
-        "metadata:\n"
-        "  name: order-service\n"
-        "spec:\n"
-        "  type: {{ .Values.service.type }}\n"
-        "  selector:\n"
-        "    app.kubernetes.io/name: order-service\n"
-        "    app.kubernetes.io/instance: {{ .Release.Name }}\n"
-        "  ports:\n"
-        "    - port: {{ .Values.service.port }}\n"
-        "      targetPort: http\n"
+    # Ensure service block
+    values.setdefault("service", {})
+    values["service"].setdefault("type", "ClusterIP")
+    values["service"].setdefault("port", 8080)
+
+    # Ensure env vars
+    env = values.setdefault("env", {})
+
+    env["SPRING_DATASOURCE_URL"] = (
+        "jdbc:postgresql://postgres-postgresql.dev.svc.cluster.local:5432/leninkart"
     )
+    env["SPRING_DATASOURCE_USERNAME"] = "postgres"
+    env["SPRING_DATASOURCE_PASSWORD"] = "root123"
+    env["SPRING_JPA_DATABASE_PLATFORM"] = "org.hibernate.dialect.PostgreSQLDialect"
+    env["SPRING_JPA_HIBERNATE_DDL_AUTO"] = "update"
+    env["SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT"] = "60000"
+    env["SPRING_KAFKA_BOOTSTRAP_SERVERS"] = "kafka.dev.svc.cluster.local:9092"
 
-print("✅ order-service Service selector fixed")
+def fix_product_service(values):
+    values.setdefault("service", {})
+    values["service"].setdefault("type", "ClusterIP")
+    values["service"].setdefault("port", 8081)
 
-# -------------------------------------------------
-# 2️⃣ FIX order-service VALUES (Postgres DNS)
-# -------------------------------------------------
-values = ROOT / "helm/order-service/values-dev.yaml"
-backup(values)
+def main():
+    print("🔧 Starting LeninKart auto-fix...")
+    print(f"📦 Backup directory: {BACKUP_DIR}")
 
-with open(values) as f:
-    v = yaml.safe_load(f)
+    for rel_path in FILES_TO_FIX:
+        path = os.path.join(ROOT, rel_path)
+        if not os.path.exists(path):
+            print(f"⚠️ Skipping missing file: {rel_path}")
+            continue
 
-v["image"]["tag"] = str(v["image"]["tag"]).strip()
-v["env"]["SPRING_DATASOURCE_URL"] = \
-    "jdbc:postgresql://postgres-postgresql:5432/leninkart"
+        backup_file(path)
+        values = load_yaml(path)
 
-write(values, v)
-print("✅ order-service Postgres hostname fixed")
+        if "order-service" in rel_path:
+            fix_order_service(values)
+            print(f"✅ Fixed order-service: {rel_path}")
 
-# -------------------------------------------------
-# 3️⃣ ADD KAFKA SERVICE (Confluent)
-# -------------------------------------------------
-kafka_svc = ROOT / "k8s/kafka/service.yaml"
-if not kafka_svc.exists():
-    kafka_service = {
-        "apiVersion": "v1",
-        "kind": "Service",
-        "metadata": {
-            "name": "kafka",
-            "namespace": "dev"
-        },
-        "spec": {
-            "selector": {
-                "app": "kafka"
-            },
-            "ports": [{
-                "port": 9092,
-                "targetPort": 9092
-            }]
-        }
-    }
-    write(kafka_svc, kafka_service)
-    print("✅ Kafka Service created (Confluent)")
+        if "product-service" in rel_path:
+            fix_product_service(values)
+            print(f"✅ Fixed product-service: {rel_path}")
 
-print("\n🎉 FIX COMPLETE — NO CONFUSION, NO EXTRA CHANGES")
-print("📦 Backup stored in .backup_fix/")
+        save_yaml(path, values)
+
+    print("\n✅ ALL FIXES APPLIED SUCCESSFULLY")
+    print("➡️ Next steps:")
+    print("   1. git status")
+    print("   2. git commit -am \"fix: postgres, image tag, helm values\"")
+    print("   3. git push")
+    print("   4. Sync ArgoCD")
+
+if __name__ == "__main__":
+    main()
