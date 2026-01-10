@@ -15,9 +15,10 @@ spec:
           enabled: false
 
         controller:
-          replicaCount: 0   # 🔥 THIS WAS MISSING
+          replicaCount: 0
 
-        replicaCount: 1     # Kafka broker
+        broker:
+          replicaCount: 1
 
         zookeeper:
           enabled: true
