@@ -41,7 +41,7 @@ livenessProbe:
 
 env:
   - name: SPRING_DATASOURCE_URL
-    value: jdbc:postgresql://dev-postgresql.dev.svc.cluster.local:5432/leninkart
+    value: SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/leninkart
 
   - name: SPRING_DATASOURCE_USERNAME
     value: postgres
