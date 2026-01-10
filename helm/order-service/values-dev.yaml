@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/order-service
-  tag: dev-29-  # Known good existing tag (fixes ImagePullBackOff)
+  tag: dev-29
   pullPolicy: IfNotPresent
 
 service:
@@ -19,7 +19,7 @@ resources:
 
 startupProbe:
   httpGet:
-    path: /actuator/health  # Actuator health endpoint (requires actuator dependency)
+    path: /actuator/health
     port: 8080
   initialDelaySeconds: 60
   periodSeconds: 10
@@ -40,14 +40,8 @@ livenessProbe:
   periodSeconds: 20
 
 env:
-  - name: SPRING_DATASOURCE_URL
-    value: jdbc:postgresql://postgres:5432/leninkartdb
-
-  - name: SPRING_DATASOURCE_USERNAME
-    value: postgres
-
-  - name: SPRING_DATASOURCE_PASSWORD
-    value: postgres
-
-  - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-    value: kafka.dev.svc.cluster.local:9092
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/leninkartdb
+  SPRING_DATASOURCE_USERNAME: postgres
+  SPRING_DATASOURCE_PASSWORD: postgres
+  SPRING_JPA_HIBERNATE_DDL_AUTO: update
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka.dev.svc.cluster.local:9092
