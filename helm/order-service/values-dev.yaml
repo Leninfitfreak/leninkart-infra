@@ -33,7 +33,7 @@ livenessProbe:
   initialDelaySeconds: 60
   periodSeconds: 20
 env:
-  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-postgresql:5432/leninkart
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-postgresql.dev.svc.cluster.local:5432/leninkart
   SPRING_DATASOURCE_USERNAME: postgres
   SPRING_DATASOURCE_PASSWORD: postgres
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
