@@ -41,7 +41,7 @@ livenessProbe:
 
 env:
   - name: SPRING_DATASOURCE_URL
-    value: SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/leninkart
+    value: jdbc:postgresql://postgres:5432/leninkart
 
   - name: SPRING_DATASOURCE_USERNAME
     value: postgres
@@ -51,9 +51,6 @@ env:
 
   - name: SPRING_DATASOURCE_DRIVER_CLASS_NAME
     value: org.postgresql.Driver
-
-  - name: SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT
-    value: org.hibernate.dialect.PostgreSQLDialect
 
   - name: SPRING_JPA_HIBERNATE_DDL_AUTO
     value: update
