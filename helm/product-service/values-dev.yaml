@@ -1,4 +1,10 @@
 replicaCount: 1
 
 image:
+  repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/product-service
   tag: dev-latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8081
