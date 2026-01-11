@@ -14,9 +14,8 @@ spec:
       releaseName: postgres
       values: |
         image:
-          registry: docker.io
           repository: bitnami/postgresql
-          tag: "latest"
+          tag: latest
 
         architecture: standalone
 
@@ -51,3 +50,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
