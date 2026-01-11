@@ -21,23 +21,23 @@ startupProbe:
   httpGet:
     path: /actuator/health
     port: 8080
-  initialDelaySeconds: 60
+  initialDelaySeconds: 90
   periodSeconds: 10
   failureThreshold: 30
-
-readinessProbe:
-  httpGet:
-    path: /actuator/health
-    port: 8080
-  initialDelaySeconds: 30
-  periodSeconds: 10
 
 livenessProbe:
   httpGet:
     path: /actuator/health
     port: 8080
-  initialDelaySeconds: 60
+  initialDelaySeconds: 120
   periodSeconds: 20
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 10
 
 env:
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-postgresql.dev.svc.cluster.local:5432/leninkart
