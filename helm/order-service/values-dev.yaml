@@ -16,7 +16,7 @@ resources:
     
 startupProbe:
   httpGet:
-    path: /actuator/health
+    path: /actuator/health/liveness
     port: 8080
   initialDelaySeconds: 70
   periodSeconds: 10
@@ -24,7 +24,7 @@ startupProbe:
 
 readinessProbe:
   httpGet:
-    path: /actuator/health
+    path: /actuator/health/readiness
     port: 8080
   initialDelaySeconds: 80
   periodSeconds: 10
@@ -32,7 +32,7 @@ readinessProbe:
 
 livenessProbe:
   httpGet:
-    path: /actuator/health
+    path: /actuator/health/liveness
     port: 8080
   initialDelaySeconds: 120
   periodSeconds: 20
