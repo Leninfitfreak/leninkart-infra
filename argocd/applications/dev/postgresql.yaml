@@ -23,8 +23,8 @@ spec:
         primary:
           persistence:
             enabled: true
-            size: 8Gi
-            storageClass: standard-rwo
+            size: 5Gi
+            storageClass: standard
 
           resources:
             requests:
