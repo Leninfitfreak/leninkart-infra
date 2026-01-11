@@ -13,25 +13,31 @@ resources:
   limits:
     cpu: 300m
     memory: 256Mi
+    
 startupProbe:
   httpGet:
-    path: /actuator/health/liveness
+    path: /actuator/health
     port: 8080
-  initialDelaySeconds: 90
+  initialDelaySeconds: 70
   periodSeconds: 10
   failureThreshold: 30
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8080
+  initialDelaySeconds: 80
+  periodSeconds: 10
+  failureThreshold: 6
+
 livenessProbe:
   httpGet:
-    path: /actuator/health/liveness
+    path: /actuator/health
     port: 8080
   initialDelaySeconds: 120
   periodSeconds: 20
-readinessProbe:
-  httpGet:
-    path: /actuator/health/readiness
-    port: 8080
-  initialDelaySeconds: 30
-  periodSeconds: 10
+  failureThreshold: 5
+  
 env:
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-postgresql.dev.svc.cluster.local:5432/leninkart
   SPRING_DATASOURCE_USERNAME: postgres
