@@ -13,6 +13,11 @@ spec:
     helm:
       releaseName: postgres
       values: |
+        image:
+          registry: docker.io
+          repository: bitnami/postgresql
+          tag: "latest"
+
         architecture: standalone
 
         auth:
@@ -23,8 +28,8 @@ spec:
         primary:
           persistence:
             enabled: true
-            size: 5Gi
-            storageClass: standard
+            size: 8Gi
+            storageClass: standard-rwo
 
           resources:
             requests:
@@ -46,5 +51,3 @@ spec:
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
