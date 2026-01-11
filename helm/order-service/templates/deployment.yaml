@@ -18,28 +18,44 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+
           ports:
             - name: http
               containerPort: {{ .Values.service.port | default 8080 }}
               protocol: TCP
+
+          # -------------------- STARTUP PROBE --------------------
+          startupProbe:
+            httpGet:
+              path: {{ .Values.startupProbe.httpGet.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+
+          # -------------------- READINESS PROBE --------------------
           readinessProbe:
             httpGet:
-              path: {{ .Values.readinessProbe.path | default "/health" }}
+              path: {{ .Values.readinessProbe.httpGet.path }}
               port: http
-            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds | default 30 }}
-            periodSeconds: {{ .Values.readinessProbe.periodSeconds | default 10 }}
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds | default 5 }}
-            failureThreshold: {{ .Values.readinessProbe.failureThreshold | default 6 }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+
+          # -------------------- LIVENESS PROBE --------------------
           livenessProbe:
             httpGet:
-              path: {{ .Values.livenessProbe.path | default "/health" }}
+              path: {{ .Values.livenessProbe.httpGet.path }}
               port: http
-            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds | default 60 }}
-            periodSeconds: {{ .Values.livenessProbe.periodSeconds | default 10 }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds | default 5 }}
-            failureThreshold: {{ .Values.livenessProbe.failureThreshold | default 10 }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+
           env:
           {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
