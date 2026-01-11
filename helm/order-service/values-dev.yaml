@@ -1,11 +1,34 @@
 replicaCount: 1
+
 image:
   repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/order-service
-  tag: dev-30-
+  tag: dev-30
   pullPolicy: IfNotPresent
+
 service:
-  type: ClusterIP
   port: 8080
+
+startupProbe:
+  httpGet:
+    path: /actuator/health
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  failureThreshold: 30
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health/readiness
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 6
+
+livenessProbe:
+  httpGet:
+    path: /actuator/health/liveness
+  initialDelaySeconds: 60
+  periodSeconds: 20
+  failureThreshold: 10
+
 resources:
   requests:
     cpu: 100m
@@ -13,35 +36,10 @@ resources:
   limits:
     cpu: 300m
     memory: 256Mi
-    
-startupProbe:
-  httpGet:
-    path: /actuator/health/liveness
-    port: 8080
-  initialDelaySeconds: 70
-  periodSeconds: 10
-  failureThreshold: 30
 
-readinessProbe:
-  httpGet:
-    path: /actuator/health/readiness
-    port: 8080
-  initialDelaySeconds: 80
-  periodSeconds: 10
-  failureThreshold: 6
-
-livenessProbe:
-  httpGet:
-    path: /actuator/health/liveness
-    port: 8080
-  initialDelaySeconds: 120
-  periodSeconds: 20
-  failureThreshold: 5
-  
 env:
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-postgresql.dev.svc.cluster.local:5432/leninkart
   SPRING_DATASOURCE_USERNAME: postgres
-  SPRING_DATASOURCE_PASSWORD: postgres
+  SPRING_DATASOURCE_PASSWORD: root123
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
-  SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: '0'
   SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka.dev.svc.cluster.local:9092
