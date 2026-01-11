@@ -7,7 +7,7 @@ spec:
   project: leninkart
 
   source:
-    repoURL: oci://registry-1.docker.io/bitnamicharts
+    repoURL: https://charts.bitnami.com/bitnami
     chart: postgresql
     targetRevision: 15.5.0
     helm:
@@ -24,17 +24,15 @@ spec:
           persistence:
             enabled: true
             size: 8Gi
+            storageClass: standard-rwo
 
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
             limits:
-              cpu: 300m
+              cpu: 500m
               memory: 512Mi
-
-          podAnnotations:
-            backup: "true"
 
         service:
           ports:
