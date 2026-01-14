@@ -1,8 +1,8 @@
 replicaCount: 1
 
 image:
-  repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/product-service
-  tag: "15cc13622405416f5069e334a8020afeb6e706a5"
+  repository: leninfitfreak/product-service
+  tag: "ebf2ec79ef6f82b1572ec982a96c53b7429feb33"
   pullPolicy: IfNotPresent
 
 service:
