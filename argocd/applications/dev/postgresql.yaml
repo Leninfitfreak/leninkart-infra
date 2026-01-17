@@ -1,93 +1,65 @@
-# =========================================================
-# Bitnami PostgreSQL - DEV values
-# Compatible with chart: postgresql 15.5.0
-# Safe for Minikube / low-resource clusters
-# =========================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dev-postgresql
+  namespace: argocd
+spec:
+  project: leninkart
 
-# -------------------------
-# Architecture
-# -------------------------
-architecture: standalone
+  source:
+    repoURL: https://charts.bitnami.com/bitnami
+    chart: postgresql
+    targetRevision: 15.5.0
+    helm:
+      releaseName: postgres
+      values: |
+        architecture: standalone
 
-# -------------------------
-# Image (PINNED – CRITICAL)
-# -------------------------
-image:
-  registry: docker.io
-  repository: bitnami/postgresql
-  tag: 15.5.0-debian-12-r0
-  pullPolicy: IfNotPresent
+        image:
+          registry: docker.io
+          repository: bitnami/postgresql
+          tag: 15.5.0-debian-12-r0
+          pullPolicy: IfNotPresent
 
-# -------------------------
-# Authentication
-# -------------------------
-auth:
-  enablePostgresUser: true
-  postgresPassword: postgres
-  username: lenin
-  password: lenin123
-  database: leninkart
+        auth:
+          enablePostgresUser: true
+          postgresPassword: postgres
+          username: postgres
+          password: postgres
+          database: leninkart
 
-# -------------------------
-# Primary (StatefulSet)
-# -------------------------
-primary:
-  name: primary
+        primary:
+          persistence:
+            enabled: true
+            size: 8Gi
+            storageClass: standard
 
-  persistence:
-    enabled: true
-    size: 8Gi
-    storageClass: standard
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: 250m
+              memory: 512Mi
 
-  resources:
-    requests:
-      cpu: 50m
-      memory: 256Mi
-    limits:
-      cpu: 250m
-      memory: 512Mi
+        service:
+          type: ClusterIP
+          ports:
+            postgresql: 5432
 
-  podSecurityContext:
-    enabled: true
-    fsGroup: 1001
+        metrics:
+          enabled: false
 
-  containerSecurityContext:
-    enabled: true
-    runAsUser: 1001
-    runAsNonRoot: true
+        volumePermissions:
+          enabled: true
 
-  livenessProbe:
-    enabled: true
-    initialDelaySeconds: 30
-    periodSeconds: 10
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
 
-  readinessProbe:
-    enabled: true
-    initialDelaySeconds: 5
-    periodSeconds: 10
-
-# -------------------------
-# Service
-# -------------------------
-service:
-  type: ClusterIP
-  ports:
-    postgresql: 5432
-
-# -------------------------
-# Network / TLS (DEV)
-# -------------------------
-tls:
-  enabled: false
-
-# -------------------------
-# Metrics (disabled for DEV)
-# -------------------------
-metrics:
-  enabled: false
-
-# -------------------------
-# Volume permissions (Minikube safe)
-# -------------------------
-volumePermissions:
-  enabled: true
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
