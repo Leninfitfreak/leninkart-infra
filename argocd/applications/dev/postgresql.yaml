@@ -15,26 +15,15 @@ spec:
       values: |
         architecture: standalone
 
+        image:
+          registry: docker.io
+          repository: postgres
+          tag: "16.3"
+
         auth:
-          enablePostgresUser: true
-          postgresPassword: postgres
           username: postgres
           password: postgres
           database: leninkart
-
-        # ✅ CORRECT, STABLE IMAGE (DO NOT PIN PATCH TAGS)
-        image:
-          registry: docker.io
-          repository: bitnami/postgresql
-          tag: 16-debian-12
-
-        # ✅ FIXED helper image
-        volumePermissions:
-          enabled: true
-          image:
-            registry: docker.io
-            repository: bitnami/os-shell
-            tag: latest
 
         primary:
           persistence:
@@ -42,15 +31,7 @@ spec:
             size: 8Gi
             storageClass: standard
 
-          resources:
-            requests:
-              cpu: 50m
-              memory: 256Mi
-            limits:
-              cpu: 250m
-              memory: 512Mi
-
-        diagnosticMode:
+        volumePermissions:
           enabled: false
 
         metrics:
@@ -64,5 +45,3 @@ spec:
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
