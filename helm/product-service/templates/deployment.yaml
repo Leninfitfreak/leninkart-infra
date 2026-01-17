@@ -20,9 +20,8 @@ spec:
           ports:
             - containerPort: {{ .Values.service.port | default 8081 }}
 
-          # 🔥 THIS WAS MISSING (CRITICAL)
           env:
-          {{- range $key, $value := .Values.env }}
+            {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
-          {{- end }}
+            {{- end }}
