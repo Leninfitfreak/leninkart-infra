@@ -36,11 +36,13 @@ spec:
               cpu: 250m
               memory: 512Mi
 
-        ## 🔥 Disable Bitnami helper containers
+        # 🔥 FIX: override helper image
         volumePermissions:
-          enabled: false
+          enabled: true
+          image:
+            repository: bitnami/os-shell
+            tag: latest
 
-        ## 🔥 Disable diagnostic / shell helpers
         diagnosticMode:
           enabled: false
 
