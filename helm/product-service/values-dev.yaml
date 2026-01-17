@@ -49,4 +49,10 @@ env:
 
   SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
+  SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
 
+<<<<<<< HEAD
+=======
+  SPRING_SQL_INIT_MODE: never
+
+>>>>>>> 46f6c1bdfd368c3740339fb7626bde102a6da28c
