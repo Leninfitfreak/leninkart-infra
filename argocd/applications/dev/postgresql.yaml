@@ -15,7 +15,7 @@ spec:
       values: |
         image:
           repository: bitnami/postgresql
-          tag: latest
+          tag: 15.5.0-debian-11-r0
 
         architecture: standalone
 
@@ -23,6 +23,7 @@ spec:
           username: postgres
           password: postgres
           database: leninkart
+          enablePostgresUser: true
 
         primary:
           persistence:
@@ -35,7 +36,7 @@ spec:
               cpu: 10m
               memory: 128Mi
             limits:
-              cpu: 20m
+              cpu: 200m
               memory: 256Mi
 
         service:
