@@ -15,12 +15,6 @@ spec:
       values: |
         architecture: standalone
 
-        image:
-          registry: docker.io
-          repository: postgres
-          tag: "15"
-          pullPolicy: IfNotPresent
-
         auth:
           enablePostgresUser: true
           postgresPassword: postgres
@@ -42,6 +36,14 @@ spec:
               cpu: 250m
               memory: 512Mi
 
+        ## 🔥 Disable Bitnami helper containers
+        volumePermissions:
+          enabled: false
+
+        ## 🔥 Disable diagnostic / shell helpers
+        diagnosticMode:
+          enabled: false
+
         metrics:
           enabled: false
 
@@ -53,3 +55,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
