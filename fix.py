@@ -1,13 +1,34 @@
 import os
 
 BASE_DIR = "k8s/postgres"
+NAMESPACE = "dev"
 
-STATEFULSET_YAML = """\
-apiVersion: apps/v1
+POSTGRES_DB = "leninkart"
+POSTGRES_USER = "postgres"
+POSTGRES_PASSWORD = "postgres"
+POSTGRES_IMAGE = "postgres:16"   # OFFICIAL, STABLE TAG
+
+os.makedirs(BASE_DIR, exist_ok=True)
+
+# ------------------ SECRET ------------------
+secret_yaml = f"""apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: {NAMESPACE}
+type: Opaque
+stringData:
+  POSTGRES_DB: {POSTGRES_DB}
+  POSTGRES_USER: {POSTGRES_USER}
+  POSTGRES_PASSWORD: {POSTGRES_PASSWORD}
+"""
+
+# ------------------ STATEFULSET ------------------
+statefulset_yaml = f"""apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: postgres
-  namespace: dev
+  namespace: {NAMESPACE}
 spec:
   serviceName: postgres
   replicas: 1
@@ -21,16 +42,25 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:16
+          image: {POSTGRES_IMAGE}
           ports:
             - containerPort: 5432
           env:
-            - name: POSTGRES_USER
-              value: postgres
-            - name: POSTGRES_PASSWORD
-              value: postgres
             - name: POSTGRES_DB
-              value: leninkart
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
           resources:
             requests:
               cpu: 100m
@@ -46,19 +76,19 @@ spec:
         name: postgres-data
       spec:
         accessModes: ["ReadWriteOnce"]
-        storageClassName: standard
         resources:
           requests:
             storage: 8Gi
 """
 
-SERVICE_YAML = """\
-apiVersion: v1
+# ------------------ SERVICE ------------------
+service_yaml = f"""apiVersion: v1
 kind: Service
 metadata:
   name: postgres
-  namespace: dev
+  namespace: {NAMESPACE}
 spec:
+  type: ClusterIP
   selector:
     app: postgres
   ports:
@@ -66,19 +96,17 @@ spec:
       targetPort: 5432
 """
 
-def main():
-    os.makedirs(BASE_DIR, exist_ok=True)
+# Write files
+files = {
+    "postgres-secret.yaml": secret_yaml,
+    "postgres-statefulset.yaml": statefulset_yaml,
+    "postgres-service.yaml": service_yaml,
+}
 
-    with open(os.path.join(BASE_DIR, "postgres-statefulset.yaml"), "w") as f:
-        f.write(STATEFULSET_YAML)
+for filename, content in files.items():
+    with open(os.path.join(BASE_DIR, filename), "w") as f:
+        f.write(content)
 
-    with open(os.path.join(BASE_DIR, "postgres-service.yaml"), "w") as f:
-        f.write(SERVICE_YAML)
-
-    print("✅ PostgreSQL manifests generated successfully!")
-    print("📂 Location: k8s/postgres/")
-    print("➡️ Apply with:")
-    print("   kubectl apply -f k8s/postgres/")
-
-if __name__ == "__main__":
-    main()
+print("✅ PostgreSQL manifests generated successfully!")
+print("📂 Location: k8s/postgres/")
+print("🚀 Ready for ArgoCD sync")
