@@ -22,19 +22,17 @@ spec:
           password: postgres
           database: leninkart
 
-        # --- IMPORTANT FIX: override images to bitnamilegacy ---
+        # 🔥 FIXED IMAGE (THIS IS THE KEY)
         image:
           registry: docker.io
           repository: bitnamilegacy/postgresql
-          # Keep chart default tag unless you want to pin explicitly:
-          # tag: 16.3.0-debian-12-r10
+          tag: 16.3.0-debian-12-r10
 
         volumePermissions:
           enabled: true
           image:
             registry: docker.io
             repository: bitnamilegacy/os-shell
-            # This is what your chart tried and failed with on docker.io/bitnami
             tag: 12-debian-12-r21
 
         primary:
@@ -53,7 +51,6 @@ spec:
 
         diagnosticMode:
           enabled: false
-
         metrics:
           enabled: false
 
