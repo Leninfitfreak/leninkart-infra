@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: leninfitfreak/product-service
-  tag: "21089830169"
+  tag: "21089937961"
   pullPolicy: IfNotPresent
 
 service:
