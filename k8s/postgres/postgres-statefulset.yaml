@@ -1,8 +1,3 @@
-import os
-
-BASE_DIR = "k8s/postgres"
-
-STATEFULSET_YAML = """\
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -50,35 +45,3 @@ spec:
         resources:
           requests:
             storage: 8Gi
-"""
-
-SERVICE_YAML = """\
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgres
-  namespace: dev
-spec:
-  selector:
-    app: postgres
-  ports:
-    - port: 5432
-      targetPort: 5432
-"""
-
-def main():
-    os.makedirs(BASE_DIR, exist_ok=True)
-
-    with open(os.path.join(BASE_DIR, "postgres-statefulset.yaml"), "w") as f:
-        f.write(STATEFULSET_YAML)
-
-    with open(os.path.join(BASE_DIR, "postgres-service.yaml"), "w") as f:
-        f.write(SERVICE_YAML)
-
-    print("✅ PostgreSQL manifests generated successfully!")
-    print("📂 Location: k8s/postgres/")
-    print("➡️ Apply with:")
-    print("   kubectl apply -f k8s/postgres/")
-
-if __name__ == "__main__":
-    main()
