@@ -15,6 +15,24 @@ spec:
       values: |
         architecture: standalone
 
+        # 🔥 GLOBAL override (this is what was missing)
+        global:
+          imageRegistry: docker.io
+          imagePullSecrets: []
+          storageClass: standard
+
+        image:
+          registry: docker.io
+          repository: bitnami/postgresql
+          tag: 16.3.0
+          pullPolicy: IfNotPresent
+
+        osShell:
+          image:
+            registry: docker.io
+            repository: bitnami/os-shell
+            tag: latest
+
         auth:
           enablePostgresUser: true
           postgresPassword: postgres
@@ -36,12 +54,8 @@ spec:
               cpu: 250m
               memory: 512Mi
 
-        # 🔥 FIX: override helper image
         volumePermissions:
           enabled: true
-          image:
-            repository: bitnami/os-shell
-            tag: latest
 
         diagnosticMode:
           enabled: false
@@ -57,5 +71,3 @@ spec:
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
