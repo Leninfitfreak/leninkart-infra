@@ -37,5 +37,15 @@ spec:
             - name: KAFKA_INTER_BROKER_LISTENER_NAME
               value: "PLAINTEXT"
 
+            # 🔴 REQUIRED for single broker
             - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
               value: "1"
+
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+
+            - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
+              value: "0"
