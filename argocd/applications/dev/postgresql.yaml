@@ -15,6 +15,12 @@ spec:
       values: |
         architecture: standalone
 
+        image:
+          registry: docker.io
+          repository: postgres
+          tag: "15"
+          pullPolicy: IfNotPresent
+
         auth:
           enablePostgresUser: true
           postgresPassword: postgres
@@ -39,9 +45,6 @@ spec:
         metrics:
           enabled: false
 
-        volumePermissions:
-          enabled: true
-
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
@@ -50,5 +53,3 @@ spec:
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
