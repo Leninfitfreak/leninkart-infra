@@ -1,7 +1,7 @@
 replicaCount: 1
 image:
   repository: leninfitfreak/order-service
-  tag: "21113004948"
+  tag: "21113048591"
   pullPolicy: IfNotPresent
 service:
   port: 8080
