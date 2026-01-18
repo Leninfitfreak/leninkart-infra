@@ -1,38 +1,46 @@
 from pathlib import Path
 import shutil
 
-FILE = Path("helm/order-service/templates/service.yaml")
+INGRESS = Path("leninkart-ingress.yaml")
 
-OLD = """  selector:
-    app.kubernetes.io/name: order-service
-    app.kubernetes.io/instance: {{ .Release.Name }}
+OLD = """      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 3000
 """
 
-NEW = """  selector:
-    app.kubernetes.io/name: order-service
-    app.kubernetes.io/instance: dev-order-service
+NEW = """      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 80
 """
 
 def backup():
-    bak = FILE.with_suffix(".yaml.bak")
+    bak = INGRESS.with_suffix(".yaml.bak2")
     if not bak.exists():
-        shutil.copy(FILE, bak)
+        shutil.copy(INGRESS, bak)
         print(f"📦 Backup created: {bak}")
 
 def fix():
-    content = FILE.read_text()
+    content = INGRESS.read_text()
 
     if NEW in content:
-        print("✅ order-service selector already fixed")
+        print("✅ Ingress frontend port already correct")
         return
 
     if OLD not in content:
-        print("❌ Expected selector not found — check manually")
+        print("❌ Expected ingress block not found — check manually")
         return
 
     backup()
-    FILE.write_text(content.replace(OLD, NEW))
-    print("✅ order-service Service selector FIXED")
+    INGRESS.write_text(content.replace(OLD, NEW))
+    print("✅ Ingress frontend port FIXED (3000 → 80)")
 
 if __name__ == "__main__":
     fix()
