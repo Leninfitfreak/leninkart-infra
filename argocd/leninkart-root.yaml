@@ -6,24 +6,20 @@ metadata:
 spec:
   description: LeninKart DevOps Project
 
-  # ✅ Allow Helm & Git repositories
   sourceRepos:
     - https://charts.bitnami.com/bitnami
     - https://github.com/leninfitfreak/*
 
-  # ✅ Allow deployment destinations
   destinations:
     - namespace: dev
       server: https://kubernetes.default.svc
     - namespace: argocd
       server: https://kubernetes.default.svc
 
-  # ✅ Allow all cluster-scoped resources (needed for Helm)
   clusterResourceWhitelist:
-    - group: '*'
-      kind: '*'
+    - group: "*"
+      kind: "*"
 
-  # ✅ Allow all namespace-scoped resources
   namespaceResourceWhitelist:
-    - group: '*'
-      kind: '*'
+    - group: "*"
+      kind: "*"

@@ -1,34 +1,28 @@
 replicaCount: 1
-
 image:
   repository: leninfitfreak/order-service
-  tag: "21090067717"
+  tag: '21090067717'
   pullPolicy: IfNotPresent
-
 service:
   port: 8080
-
 startupProbe:
   httpGet:
     path: /actuator/health
   initialDelaySeconds: 60
   periodSeconds: 10
   failureThreshold: 30
-
 readinessProbe:
   httpGet:
     path: /actuator/health/readiness
   initialDelaySeconds: 30
   periodSeconds: 10
   failureThreshold: 6
-
 livenessProbe:
   httpGet:
     path: /actuator/health/liveness
   initialDelaySeconds: 60
   periodSeconds: 20
   failureThreshold: 10
-
 resources:
   requests:
     cpu: 100m
@@ -36,13 +30,10 @@ resources:
   limits:
     cpu: 300m
     memory: 256Mi
-
 env:
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
   SPRING_DATASOURCE_USERNAME: postgres
   SPRING_DATASOURCE_PASSWORD: postgres
-
   SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
-
-  SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "60000"
+  SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: '60000'
