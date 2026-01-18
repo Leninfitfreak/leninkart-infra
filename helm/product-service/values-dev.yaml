@@ -35,6 +35,7 @@ livenessProbe:
   periodSeconds: 20
   failureThreshold: 10
 env:
+  SERVER_PORT: "8081"
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
   SPRING_DATASOURCE_USERNAME: postgres
   SPRING_DATASOURCE_PASSWORD: postgres

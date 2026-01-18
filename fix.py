@@ -1,18 +1,36 @@
 from pathlib import Path
 import shutil
+import sys
 
-INGRESS = Path("leninkart-ingress.yaml")
+INGRESS_FILE = Path("leninkart-ingress.yaml")
 
-OLD = """      - path: /
+FIXED_INGRESS = """apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-ingress
+  namespace: dev
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /api/products
         pathType: Prefix
         backend:
           service:
-            name: leninkart-frontend
+            name: leninkart-product-service
             port:
-              number: 3000
-"""
+              number: 8081
 
-NEW = """      - path: /
+      - path: /api/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+
+      - path: /
         pathType: Prefix
         backend:
           service:
@@ -21,26 +39,22 @@ NEW = """      - path: /
               number: 80
 """
 
-def backup():
-    bak = INGRESS.with_suffix(".yaml.bak2")
-    if not bak.exists():
-        shutil.copy(INGRESS, bak)
-        print(f"📦 Backup created: {bak}")
+def backup_file():
+    backup = INGRESS_FILE.with_suffix(".yaml.bak_auto")
+    if not backup.exists():
+        shutil.copy(INGRESS_FILE, backup)
+        print(f"📦 Backup created: {backup}")
 
-def fix():
-    content = INGRESS.read_text()
+def fix_ingress():
+    if not INGRESS_FILE.exists():
+        print("❌ leninkart-ingress.yaml not found")
+        sys.exit(1)
 
-    if NEW in content:
-        print("✅ Ingress frontend port already correct")
-        return
-
-    if OLD not in content:
-        print("❌ Expected ingress block not found — check manually")
-        return
-
-    backup()
-    INGRESS.write_text(content.replace(OLD, NEW))
-    print("✅ Ingress frontend port FIXED (3000 → 80)")
+    backup_file()
+    INGRESS_FILE.write_text(FIXED_INGRESS.strip() + "\n")
+    print("✅ Ingress FIXED successfully")
+    print("👉 Removed rewrite-target & regex")
+    print("👉 API paths now match Spring Boot controllers")
 
 if __name__ == "__main__":
-    fix()
+    fix_ingress()

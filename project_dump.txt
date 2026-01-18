@@ -86,55 +86,52 @@ if __name__ == "__main__":
 
 ### FILE: fix.py
 ```
-import os
+from pathlib import Path
 import shutil
 
-FILE_PATH = "helm/order-service/templates/service.yaml"
+INGRESS = Path("leninkart-ingress.yaml")
 
-WRONG_SELECTOR = """  selector:
-    app.kubernetes.io/name: leninkart-order-service
-    app.kubernetes.io/instance: {{ .Release.Name }}
+OLD = """      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 3000
 """
 
-CORRECT_SELECTOR = """  selector:
-    app.kubernetes.io/name: order-service
-    app.kubernetes.io/instance: {{ .Release.Name }}
+NEW = """      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 80
 """
 
-def backup_file(path):
-    backup_path = path + ".bak"
-    if not os.path.exists(backup_path):
-        shutil.copy(path, backup_path)
-        print(f"📦 Backup created: {backup_path}")
+def backup():
+    bak = INGRESS.with_suffix(".yaml.bak2")
+    if not bak.exists():
+        shutil.copy(INGRESS, bak)
+        print(f"📦 Backup created: {bak}")
 
-def fix_selector():
-    if not os.path.exists(FILE_PATH):
-        print(f"❌ File not found: {FILE_PATH}")
+def fix():
+    content = INGRESS.read_text()
+
+    if NEW in content:
+        print("✅ Ingress frontend port already correct")
         return
 
-    with open(FILE_PATH, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    if CORRECT_SELECTOR in content:
-        print("✅ Selector already correct — nothing to change")
+    if OLD not in content:
+        print("❌ Expected ingress block not found — check manually")
         return
 
-    if WRONG_SELECTOR not in content:
-        print("⚠️ Expected selector pattern not found — manual check needed")
-        return
-
-    backup_file(FILE_PATH)
-
-    content = content.replace(WRONG_SELECTOR, CORRECT_SELECTOR)
-
-    with open(FILE_PATH, "w", encoding="utf-8") as f:
-        f.write(content)
-
-    print("✅ order-service selector fixed successfully")
+    backup()
+    INGRESS.write_text(content.replace(OLD, NEW))
+    print("✅ Ingress frontend port FIXED (3000 → 80)")
 
 if __name__ == "__main__":
-    print("🔧 Fixing order-service Service selector\n")
-    fix_selector()
+    fix()
 ```
 
 ### FILE: helm_order-service_values-dev.yaml
@@ -202,6 +199,49 @@ kind: Ingress
 metadata:
   name: leninkart-ingress
   namespace: dev
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      # ---- PRODUCT SERVICE ----
+      - path: /api/products/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: leninkart-product-service
+            port:
+              number: 8081
+
+      # ---- ORDER SERVICE ----
+      - path: /api/orders/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+
+      # ---- FRONTEND (NO REWRITE) ----
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 80
+```
+
+### FILE: leninkart-ingress.yaml.bak
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-ingress
+  namespace: dev
 spec:
   ingressClassName: nginx
   rules:
@@ -230,7 +270,7 @@ spec:
               number: 3000
 ```
 
-### FILE: leninkart-ingress.yaml.bak
+### FILE: leninkart-ingress.yaml.bak2
 ```
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -1008,7 +1048,7 @@ spec:
   type: {{ .Values.service.type }}
   selector:
     app.kubernetes.io/name: order-service
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/instance: dev-order-service
   ports:
     - port: {{ .Values.service.port }}
       targetPort: http
