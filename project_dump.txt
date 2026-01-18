@@ -89,49 +89,114 @@ if __name__ == "__main__":
 from pathlib import Path
 import shutil
 
-INGRESS = Path("leninkart-ingress.yaml")
+ROOT = Path(".")
+HELM_INGRESS = ROOT / "helm" / "ingress"
+TEMPLATES = HELM_INGRESS / "templates"
+ARGO_APP = ROOT / "argocd" / "applications" / "dev" / "ingress.yaml"
 
-OLD = """      - path: /
+OLD_INGRESS_FILES = [
+    "leninkart-ingress.yaml",
+    "leninkart-api-ingress.yaml",
+    "leninkart-frontend-ingress.yaml"
+]
+
+def cleanup_old_ingress():
+    for f in OLD_INGRESS_FILES:
+        path = ROOT / f
+        if path.exists():
+            shutil.move(str(path), str(path) + ".bak")
+            print(f"🗑️  Disabled old ingress: {f}")
+
+def create_helm_chart():
+    TEMPLATES.mkdir(parents=True, exist_ok=True)
+
+    (HELM_INGRESS / "Chart.yaml").write_text("""\
+apiVersion: v2
+name: ingress
+description: LeninKart Ingress
+type: application
+version: 0.1.0
+""")
+
+    (HELM_INGRESS / "values-dev.yaml").write_text("""\
+namespace: dev
+""")
+
+    (TEMPLATES / "ingress.yaml").write_text("""\
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-ingress
+  namespace: {{ .Values.namespace }}
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /api/products
         pathType: Prefix
         backend:
           service:
-            name: leninkart-frontend
+            name: leninkart-product-service
             port:
-              number: 3000
-"""
+              number: 8081
 
-NEW = """      - path: /
+      - path: /api/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+
+      - path: /
         pathType: Prefix
         backend:
           service:
             name: leninkart-frontend
             port:
               number: 80
-"""
+""")
 
-def backup():
-    bak = INGRESS.with_suffix(".yaml.bak2")
-    if not bak.exists():
-        shutil.copy(INGRESS, bak)
-        print(f"📦 Backup created: {bak}")
+    print("✅ Helm ingress chart created")
 
-def fix():
-    content = INGRESS.read_text()
+def create_argocd_app():
+    ARGO_APP.write_text("""\
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dev-ingress
+  namespace: argocd
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: helm/ingress
+    helm:
+      valueFiles:
+        - values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+""")
+    print("✅ ArgoCD ingress application created")
 
-    if NEW in content:
-        print("✅ Ingress frontend port already correct")
-        return
-
-    if OLD not in content:
-        print("❌ Expected ingress block not found — check manually")
-        return
-
-    backup()
-    INGRESS.write_text(content.replace(OLD, NEW))
-    print("✅ Ingress frontend port FIXED (3000 → 80)")
+def main():
+    print("🚀 Enabling GitOps-managed ingress...")
+    cleanup_old_ingress()
+    create_helm_chart()
+    create_argocd_app()
+    print("\n✅ DONE")
+    print("➡️  Commit & push to dev branch")
+    print("➡️  ArgoCD will auto-sync ingress")
 
 if __name__ == "__main__":
-    fix()
+    main()
 ```
 
 ### FILE: helm_order-service_values-dev.yaml
@@ -199,33 +264,27 @@ kind: Ingress
 metadata:
   name: leninkart-ingress
   namespace: dev
-  annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$1
 spec:
   ingressClassName: nginx
   rules:
   - http:
       paths:
-      # ---- PRODUCT SERVICE ----
-      - path: /api/products/?(.*)
-        pathType: ImplementationSpecific
+      - path: /api/products
+        pathType: Prefix
         backend:
           service:
             name: leninkart-product-service
             port:
               number: 8081
 
-      # ---- ORDER SERVICE ----
-      - path: /api/orders/?(.*)
-        pathType: ImplementationSpecific
+      - path: /api/orders
+        pathType: Prefix
         backend:
           service:
             name: leninkart-order-service
             port:
               number: 8080
 
-      # ---- FRONTEND (NO REWRITE) ----
       - path: /
         pathType: Prefix
         backend:
@@ -270,6 +329,49 @@ spec:
               number: 3000
 ```
 
+### FILE: leninkart-ingress.yaml.bak-final
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-ingress
+  namespace: dev
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      # ---- PRODUCT SERVICE ----
+      - path: /api/products/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: leninkart-product-service
+            port:
+              number: 8081
+
+      # ---- ORDER SERVICE ----
+      - path: /api/orders/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+
+      # ---- FRONTEND (NO REWRITE) ----
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 80
+```
+
 ### FILE: leninkart-ingress.yaml.bak2
 ```
 apiVersion: networking.k8s.io/v1
@@ -303,6 +405,49 @@ spec:
             name: leninkart-frontend
             port:
               number: 3000
+```
+
+### FILE: leninkart-ingress.yaml.bak_auto
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-ingress
+  namespace: dev
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      # ---- PRODUCT SERVICE ----
+      - path: /api/products/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: leninkart-product-service
+            port:
+              number: 8081
+
+      # ---- ORDER SERVICE ----
+      - path: /api/orders/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+
+      # ---- FRONTEND (NO REWRITE) ----
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 80
 ```
 
 ### FILE: project_dump.txt
@@ -1119,6 +1264,7 @@ livenessProbe:
   periodSeconds: 20
   failureThreshold: 10
 env:
+  SERVER_PORT: "8081"
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
   SPRING_DATASOURCE_USERNAME: postgres
   SPRING_DATASOURCE_PASSWORD: postgres
@@ -1582,5 +1728,97 @@ spec:
         resources:
           requests:
             storage: 8Gi
+```
+
+### DIRECTORY: _ingress_backup/
+
+### FILE: _ingress_backup\leninkart-api-ingress.yaml
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-api-ingress
+  namespace: dev
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /api/products/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: leninkart-product-service
+            port:
+              number: 8081
+
+      - path: /api/orders/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+```
+
+### FILE: _ingress_backup\leninkart-frontend-ingress.yaml
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-frontend-ingress
+  namespace: dev
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 80
+```
+
+### FILE: _ingress_backup\leninkart-ingress.yaml.bak
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-ingress
+  namespace: dev
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /api/products
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-product-service
+            port:
+              number: 8081
+
+      - path: /api/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 80
 ```
 
