@@ -1,5 +1,11 @@
 # Project Dump - Root: C:\Projects\infra\leninkart-infra
 
+### FILE: .gitignore
+```
+*.bak
+project_dump.txt
+```
+
 ### FILE: README.md
 ```
 # LeninKart Infrastructure (GitOps)
@@ -133,77 +139,79 @@ service:
   port: 8081
 ```
 
+### FILE: leninkart-ingress.yaml
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-ingress
+  namespace: dev
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /api/products
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-product-service
+            port:
+              number: 8081
+      - path: /api/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 3000
+```
+
+### FILE: leninkart-ingress.yaml.bak
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-ingress
+  namespace: dev
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /api/products
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-product-service
+            port:
+              number: 8081
+      - path: /api/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 3000
+```
+
 ### FILE: project_dump.txt
 ```
 
-```
-
-### DIRECTORY: .backup_fix/
-
-### FILE: .backup_fix\service.yaml
-```
-apiVersion: v1
-kind: Service
-metadata:
-  name: order-service
-spec:
-  type: {{ .Values.service.type }}
-  selector:
-    app: order-service
-  ports:
-    - port: {{ .Values.service.port }}
-      targetPort: 8080
-```
-
-### FILE: .backup_fix\values-dev.yaml
-```
-replicaCount: 1
-
-image:
-  repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/order-service
-  tag: dev-29
-  pullPolicy: IfNotPresent
-
-service:
-  type: ClusterIP
-  port: 8080
-
-resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 300m
-    memory: 256Mi
-
-startupProbe:
-  httpGet:
-    path: /actuator/health
-    port: 8080
-  initialDelaySeconds: 60
-  periodSeconds: 10
-  failureThreshold: 30
-
-readinessProbe:
-  httpGet:
-    path: /actuator/health
-    port: 8080
-  initialDelaySeconds: 30
-  periodSeconds: 10
-
-livenessProbe:
-  httpGet:
-    path: /actuator/health
-    port: 8080
-  initialDelaySeconds: 60
-  periodSeconds: 20
-
-env:
-  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/leninkartdb
-  SPRING_DATASOURCE_USERNAME: postgres
-  SPRING_DATASOURCE_PASSWORD: postgres
-  SPRING_JPA_HIBERNATE_DDL_AUTO: update
-  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka.dev.svc.cluster.local:9092
 ```
 
 ### DIRECTORY: argocd/
@@ -211,34 +219,30 @@ env:
 ### FILE: argocd\leninkart-root.yaml
 ```
 apiVersion: argoproj.io/v1alpha1
-kind: AppProject
+kind: Application
 metadata:
-  name: leninkart
+  name: leninkart-root
   namespace: argocd
 spec:
-  description: LeninKart DevOps Project
+  project: leninkart
 
-  # ✅ Allow Helm & Git repositories
-  sourceRepos:
-    - https://charts.bitnami.com/bitnami
-    - https://github.com/leninfitfreak/*
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: argocd/applications/dev
+    directory:
+      recurse: true
 
-  # ✅ Allow deployment destinations
-  destinations:
-    - namespace: dev
-      server: https://kubernetes.default.svc
-    - namespace: argocd
-      server: https://kubernetes.default.svc
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
 
-  # ✅ Allow all cluster-scoped resources (needed for Helm)
-  clusterResourceWhitelist:
-    - group: '*'
-      kind: '*'
-
-  # ✅ Allow all namespace-scoped resources
-  namespaceResourceWhitelist:
-    - group: '*'
-      kind: '*'
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
 ```
 
 ### FILE: argocd\project.yaml
@@ -249,21 +253,25 @@ metadata:
   name: leninkart
   namespace: argocd
 spec:
-  description: LeninKart GitOps Project
-  # Allow your infra repo + Bitnami charts + wildcard for flexibility in dev
+  description: LeninKart DevOps Project (DEV only)
+
   sourceRepos:
-    - https://github.com/Leninfitfreak/leninkart-infra.git
     - https://charts.bitnami.com/bitnami
-    - '*'                                   # Allows any Helm repo (safe & convenient for dev)
+    - https://github.com/Leninfitfreak/*
+
   destinations:
-    - namespace: '*'
+    - namespace: dev
       server: https://kubernetes.default.svc
+    - namespace: argocd
+      server: https://kubernetes.default.svc
+
   clusterResourceWhitelist:
-    - group: '*'
-      kind: '*'
+    - group: "*"
+      kind: "*"
+
   namespaceResourceWhitelist:
-    - group: '*'
-      kind: '*'
+    - group: "*"
+      kind: "*"
 ```
 
 ### DIRECTORY: argocd\applications/
@@ -346,51 +354,24 @@ spec:
       - CreateNamespace=true
 ```
 
-### FILE: argocd\applications\dev\postgresql.yaml
+### FILE: argocd\applications\dev\postgres.yaml
 ```
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: dev-postgresql
+  name: postgres-dev
   namespace: argocd
 spec:
   project: leninkart
-
   source:
-    repoURL: https://charts.bitnami.com/bitnami
-    chart: postgresql
-    targetRevision: 15.5.0
-    helm:
-      releaseName: postgres
-      values: |
-        architecture: standalone
-
-        image:
-          registry: docker.io
-          repository: postgres
-          tag: "16.3"
-
-        auth:
-          username: postgres
-          password: postgres
-          database: leninkart
-
-        primary:
-          persistence:
-            enabled: true
-            size: 8Gi
-            storageClass: standard
-
-        volumePermissions:
-          enabled: false
-
-        metrics:
-          enabled: false
-
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: k8s/postgres
+    directory:
+      recurse: true
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
-
   syncPolicy:
     automated:
       prune: true
@@ -580,7 +561,42 @@ version: 0.1.0
 replicaCount: 1
 image:
   repository: leninfitfreak/frontend
-  tag: "21090148165"
+  tag: '21096391668'
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 3000
+container:
+  port: 3000
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+readinessProbe:
+  httpGet:
+    path: /
+    port: 3000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 5
+livenessProbe:
+  httpGet:
+    path: /
+    port: 3000
+  initialDelaySeconds: 60
+  periodSeconds: 15
+  failureThreshold: 10
+```
+
+### FILE: helm\frontend\values-dev.yaml.bak
+```
+replicaCount: 1
+image:
+  repository: leninfitfreak/frontend
+  tag: '21096391668'
   pullPolicy: IfNotPresent
 service:
   type: ClusterIP
@@ -696,6 +712,21 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: leninkart-frontend
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: frontend
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.port }}
+```
+
+### FILE: helm\frontend\templates\service.yaml.bak
+```
+apiVersion: v1
+kind: Service
+metadata:
   name: frontend
 spec:
   type: {{ .Values.service.type }}
@@ -717,6 +748,49 @@ version: 0.1.0
 ```
 
 ### FILE: helm\order-service\values-dev.yaml
+```
+replicaCount: 1
+image:
+  repository: leninfitfreak/order-service
+  tag: '21090067717'
+  pullPolicy: IfNotPresent
+service:
+  port: 8080
+startupProbe:
+  httpGet:
+    path: /actuator/health
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  failureThreshold: 30
+readinessProbe:
+  httpGet:
+    path: /actuator/health/readiness
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 6
+livenessProbe:
+  httpGet:
+    path: /actuator/health/liveness
+  initialDelaySeconds: 60
+  periodSeconds: 20
+  failureThreshold: 10
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
+env:
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
+  SPRING_DATASOURCE_USERNAME: postgres
+  SPRING_DATASOURCE_PASSWORD: postgres
+  SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+  SPRING_JPA_HIBERNATE_DDL_AUTO: update
+  SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: '60000'
+```
+
+### FILE: helm\order-service\values-dev.yaml.bak
 ```
 replicaCount: 1
 
@@ -758,7 +832,7 @@ resources:
     memory: 256Mi
 
 env:
-  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-postgresql.dev.svc.cluster.local:5432/leninkart
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
   SPRING_DATASOURCE_USERNAME: postgres
   SPRING_DATASOURCE_PASSWORD: postgres
 
@@ -875,6 +949,22 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: leninkart-order-service
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app.kubernetes.io/name: leninkart-order-service
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+```
+
+### FILE: helm\order-service\templates\service.yaml.bak
+```
+apiVersion: v1
+kind: Service
+metadata:
   name: order-service
 spec:
   type: {{ .Values.service.type }}
@@ -897,6 +987,54 @@ version: 0.1.0
 ```
 
 ### FILE: helm\product-service\values-dev.yaml
+```
+replicaCount: 1
+image:
+  repository: leninfitfreak/product-service
+  tag: '21089937961'
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 8081
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
+startupProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8081
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  failureThreshold: 30
+readinessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8081
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 6
+livenessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8081
+  initialDelaySeconds: 60
+  periodSeconds: 20
+  failureThreshold: 10
+env:
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
+  SPRING_DATASOURCE_USERNAME: postgres
+  SPRING_DATASOURCE_PASSWORD: postgres
+  SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+  SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+  SPRING_JPA_HIBERNATE_DDL_AUTO: update
+  SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: 'true'
+```
+
+### FILE: helm\product-service\values-dev.yaml.bak
 ```
 replicaCount: 1
 
@@ -942,14 +1080,14 @@ livenessProbe:
   failureThreshold: 10
 
 env:
-  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-postgresql.dev.svc.cluster.local:5432/leninkart
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
   SPRING_DATASOURCE_USERNAME: postgres
   SPRING_DATASOURCE_PASSWORD: postgres
+  SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
 
   SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
-
-  SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "60000"
+  SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
 ```
 
 ### DIRECTORY: helm\product-service\templates/
@@ -974,11 +1112,33 @@ spec:
         - name: product-service
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+
           ports:
             - containerPort: {{ .Values.service.port | default 8081 }}
+
+          env:
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
 ```
 
 ### FILE: helm\product-service\templates\service.yaml
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: leninkart-product-service
+spec:
+  type: {{ .Values.service.type | default "ClusterIP" }}
+  selector:
+    app: product-service
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.port }}
+```
+
+### FILE: helm\product-service\templates\service.yaml.bak
 ```
 apiVersion: v1
 kind: Service
@@ -997,14 +1157,35 @@ spec:
 
 ### DIRECTORY: k8s\kafka/
 
-### FILE: k8s\kafka\kafka.yaml
+### FILE: k8s\kafka\kafka-pvc.yaml
 ```
-apiVersion: apps/v1
-kind: Deployment
+
+```
+
+### FILE: k8s\kafka\kafka-service.yaml
+```
+apiVersion: v1
+kind: Service
 metadata:
   name: kafka
   namespace: dev
 spec:
+  selector:
+    app: kafka
+  ports:
+    - port: 9092
+      targetPort: 9092
+```
+
+### FILE: k8s\kafka\kafka.yaml
+```
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: dev
+spec:
+  serviceName: kafka
   replicas: 1
   selector:
     matchLabels:
@@ -1020,8 +1201,9 @@ spec:
           ports:
             - containerPort: 9092
           env:
+            # Pod identity → broker identity (CRITICAL)
             - name: KAFKA_BROKER_ID
-              value: "1"
+              value: "0"
 
             - name: KAFKA_ZOOKEEPER_CONNECT
               value: "zookeeper.dev.svc.cluster.local:2181"
@@ -1030,7 +1212,7 @@ spec:
               value: "PLAINTEXT://0.0.0.0:9092"
 
             - name: KAFKA_ADVERTISED_LISTENERS
-              value: "PLAINTEXT://kafka.dev.svc.cluster.local:9092"
+              value: "PLAINTEXT://kafka-0.kafka.dev.svc.cluster.local:9092"
 
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
               value: "PLAINTEXT:PLAINTEXT"
@@ -1040,30 +1222,44 @@ spec:
 
             - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
               value: "1"
+
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+
+            - name: KAFKA_LOG_DIRS
+              value: "/var/lib/kafka/data"
+
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /var/lib/kafka/data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: kafka-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
 ```
 
-### FILE: k8s\kafka\service.yaml
+### FILE: k8s\kafka\zookeeper-service.yaml
 ```
-apiVersion: v1
-kind: Service
-metadata:
-  name: kafka
-  namespace: dev
-spec:
-  selector:
-    app: kafka
-  ports:
-  - port: 9092
-    targetPort: 9092
+
 ```
 
 ### FILE: k8s\kafka\zookeeper.yaml
 ```
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: zookeeper
+  namespace: dev
 spec:
+  serviceName: zookeeper
   replicas: 1
   selector:
     matchLabels:
@@ -1074,24 +1270,116 @@ spec:
         app: zookeeper
     spec:
       containers:
-      - name: zookeeper
-        image: confluentinc/cp-zookeeper:7.5.0
-        ports:
-        - containerPort: 2181
-        env:
-        - name: ZOOKEEPER_CLIENT_PORT
-          value: "2181"
-        - name: ZOOKEEPER_TICK_TIME
-          value: "2000"
----
+        - name: zookeeper
+          image: confluentinc/cp-zookeeper:7.5.0
+          ports:
+            - containerPort: 2181
+          env:
+            - name: ZOOKEEPER_CLIENT_PORT
+              value: "2181"
+            - name: ZOOKEEPER_TICK_TIME
+              value: "2000"
+          volumeMounts:
+            - name: zk-data
+              mountPath: /var/lib/zookeeper
+  volumeClaimTemplates:
+    - metadata:
+        name: zk-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+```
+
+### DIRECTORY: k8s\postgres/
+
+### FILE: k8s\postgres\postgres-secret.yaml
+```
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: dev
+type: Opaque
+stringData:
+  POSTGRES_DB: leninkart
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres
+```
+
+### FILE: k8s\postgres\postgres-service.yaml
+```
 apiVersion: v1
 kind: Service
 metadata:
-  name: zookeeper
+  name: postgres
+  namespace: dev
 spec:
+  type: ClusterIP
   selector:
-    app: zookeeper
+    app: postgres
   ports:
-  - port: 2181
+    - port: 5432
+      targetPort: 5432
+```
+
+### FILE: k8s\postgres\postgres-statefulset.yaml
+```
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: dev
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 8Gi
 ```
 

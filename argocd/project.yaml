@@ -4,18 +4,22 @@ metadata:
   name: leninkart
   namespace: argocd
 spec:
-  description: LeninKart GitOps Project
-  # Allow your infra repo + Bitnami charts + wildcard for flexibility in dev
+  description: LeninKart DevOps Project (DEV only)
+
   sourceRepos:
-    - https://github.com/Leninfitfreak/leninkart-infra.git
     - https://charts.bitnami.com/bitnami
-    - '*'                                   # Allows any Helm repo (safe & convenient for dev)
+    - https://github.com/Leninfitfreak/*
+
   destinations:
-    - namespace: '*'
+    - namespace: dev
       server: https://kubernetes.default.svc
+    - namespace: argocd
+      server: https://kubernetes.default.svc
+
   clusterResourceWhitelist:
-    - group: '*'
-      kind: '*'
+    - group: "*"
+      kind: "*"
+
   namespaceResourceWhitelist:
-    - group: '*'
-      kind: '*'
+    - group: "*"
+      kind: "*"

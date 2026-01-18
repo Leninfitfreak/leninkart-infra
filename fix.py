@@ -1,112 +1,105 @@
 import os
+import shutil
 
-BASE_DIR = "k8s/postgres"
-NAMESPACE = "dev"
+ROOT = os.getcwd()
 
-POSTGRES_DB = "leninkart"
-POSTGRES_USER = "postgres"
-POSTGRES_PASSWORD = "postgres"
-POSTGRES_IMAGE = "postgres:16"   # OFFICIAL, STABLE TAG
+def backup(file):
+    if os.path.exists(file) and not file.endswith(".bak"):
+        shutil.copy(file, file + ".bak")
 
-os.makedirs(BASE_DIR, exist_ok=True)
+def write_file(path, content):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content.strip() + "\n")
 
-# ------------------ SECRET ------------------
-secret_yaml = f"""apiVersion: v1
-kind: Secret
-metadata:
-  name: postgres-secret
-  namespace: {NAMESPACE}
-type: Opaque
-stringData:
-  POSTGRES_DB: {POSTGRES_DB}
-  POSTGRES_USER: {POSTGRES_USER}
-  POSTGRES_PASSWORD: {POSTGRES_PASSWORD}
-"""
+def fix_zookeeper_service():
+    print("✔ Fixing Zookeeper Service")
+    path = "k8s/kafka/zookeeper-service.yaml"
 
-# ------------------ STATEFULSET ------------------
-statefulset_yaml = f"""apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: postgres
-  namespace: {NAMESPACE}
-spec:
-  serviceName: postgres
-  replicas: 1
-  selector:
-    matchLabels:
-      app: postgres
-  template:
-    metadata:
-      labels:
-        app: postgres
-    spec:
-      containers:
-        - name: postgres
-          image: {POSTGRES_IMAGE}
-          ports:
-            - containerPort: 5432
-          env:
-            - name: POSTGRES_DB
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_DB
-            - name: POSTGRES_USER
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_USER
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-secret
-                  key: POSTGRES_PASSWORD
-          resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
-          volumeMounts:
-            - name: postgres-data
-              mountPath: /var/lib/postgresql/data
-  volumeClaimTemplates:
-    - metadata:
-        name: postgres-data
-      spec:
-        accessModes: ["ReadWriteOnce"]
-        resources:
-          requests:
-            storage: 8Gi
-"""
-
-# ------------------ SERVICE ------------------
-service_yaml = f"""apiVersion: v1
+    content = """
+apiVersion: v1
 kind: Service
 metadata:
-  name: postgres
-  namespace: {NAMESPACE}
+  name: zookeeper
+  namespace: dev
 spec:
-  type: ClusterIP
+  clusterIP: None
   selector:
-    app: postgres
+    app: zookeeper
   ports:
-    - port: 5432
-      targetPort: 5432
+    - name: client
+      port: 2181
+      targetPort: 2181
 """
+    write_file(path, content)
 
-# Write files
-files = {
-    "postgres-secret.yaml": secret_yaml,
-    "postgres-statefulset.yaml": statefulset_yaml,
-    "postgres-service.yaml": service_yaml,
-}
+def fix_kafka_service_exists():
+    print("✔ Validating Kafka Service")
+    path = "k8s/kafka/kafka-service.yaml"
+    if not os.path.exists(path):
+        content = """
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: dev
+spec:
+  selector:
+    app: kafka
+  ports:
+    - port: 9092
+      targetPort: 9092
+"""
+        write_file(path, content)
 
-for filename, content in files.items():
-    with open(os.path.join(BASE_DIR, filename), "w") as f:
-        f.write(content)
+def fix_order_service_probe():
+    print("✔ Fixing Order-service startupProbe")
 
-print("✅ PostgreSQL manifests generated successfully!")
-print("📂 Location: k8s/postgres/")
-print("🚀 Ready for ArgoCD sync")
+    path = "helm/order-service/values-dev.yaml"
+    if not os.path.exists(path):
+        print("⚠ order-service values-dev.yaml not found")
+        return
+
+    backup(path)
+
+    with open(path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    new_lines = []
+    inside_startup = False
+
+    for line in lines:
+        if line.strip().startswith("startupProbe:"):
+            inside_startup = True
+            new_lines.append(line)
+            continue
+
+        if inside_startup:
+            if "initialDelaySeconds" in line:
+                new_lines.append("  initialDelaySeconds: 120\n")
+                continue
+            if "failureThreshold" in line:
+                new_lines.append("  failureThreshold: 40\n")
+                continue
+            if line.startswith("readinessProbe"):
+                inside_startup = False
+
+        new_lines.append(line)
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
+def main():
+    print("\n🔧 LeninKart DEV Infra Auto-Fix\n")
+
+    fix_zookeeper_service()
+    fix_kafka_service_exists()
+    fix_order_service_probe()
+
+    print("\n✅ DONE")
+    print("📌 Helm templates were NOT YAML-parsed (correct)")
+    print("📌 Backups created with .bak")
+    print("📌 Commit and let ArgoCD sync\n")
+
+if __name__ == "__main__":
+    main()

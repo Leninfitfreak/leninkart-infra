@@ -1,25 +1,25 @@
 apiVersion: argoproj.io/v1alpha1
-kind: AppProject
+kind: Application
 metadata:
-  name: leninkart
+  name: leninkart-root
   namespace: argocd
 spec:
-  description: LeninKart DevOps Project
+  project: leninkart
 
-  sourceRepos:
-    - https://charts.bitnami.com/bitnami
-    - https://github.com/leninfitfreak/*
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: argocd/applications/dev
+    directory:
+      recurse: true
 
-  destinations:
-    - namespace: dev
-      server: https://kubernetes.default.svc
-    - namespace: argocd
-      server: https://kubernetes.default.svc
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
 
-  clusterResourceWhitelist:
-    - group: "*"
-      kind: "*"
-
-  namespaceResourceWhitelist:
-    - group: "*"
-      kind: "*"
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
