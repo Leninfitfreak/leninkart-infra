@@ -4,6 +4,9 @@
 ```
 *.bak
 project_dump.txt
+fix.py
+dump.py
+project_dump.txt
 ```
 
 ### FILE: README.md
@@ -664,15 +667,19 @@ version: 0.1.0
 ### FILE: helm\frontend\values-dev.yaml
 ```
 replicaCount: 1
+
 image:
   repository: leninfitfreak/frontend
-  tag: '21096391668'
+  tag: '21110957001'
   pullPolicy: IfNotPresent
+
 service:
   type: ClusterIP
-  port: 3000
+  port: 80          # ✅ nginx service port
+
 container:
-  port: 3000
+  port: 80          # ✅ nginx container port
+
 resources:
   requests:
     cpu: 100m
@@ -680,20 +687,22 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
+
 readinessProbe:
   httpGet:
     path: /
-    port: 3000
-  initialDelaySeconds: 30
+    port: 80        # ✅ probe nginx, not react
+  initialDelaySeconds: 10
   periodSeconds: 10
   failureThreshold: 5
+
 livenessProbe:
   httpGet:
     path: /
-    port: 3000
-  initialDelaySeconds: 60
+    port: 80        # ✅ probe nginx
+  initialDelaySeconds: 20
   periodSeconds: 15
-  failureThreshold: 10
+  failureThreshold: 5
 ```
 
 ### FILE: helm\frontend\values-dev.yaml.bak
@@ -1324,8 +1333,8 @@ spec:
             - name: KAFKA_NODE_ID
               value: "0"
 
-            - name: KAFKA_CLUSTER_ID
-              value: "MkU3OEVBNTcwNTJENDM2Qk"
+            - name: CLUSTER_ID
+              value: "cICOmzzYSGur9Qz-qJTksA"
 
             - name: KAFKA_CONTROLLER_QUORUM_VOTERS
               value: "0@kafka-0.kafka.dev.svc.cluster.local:9093"

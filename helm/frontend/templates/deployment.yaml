@@ -18,19 +18,20 @@ spec:
         - name: frontend
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+
           ports:
-            - containerPort: {{ .Values.service.port }}
+            - containerPort: {{ .Values.container.port }}
 
           readinessProbe:
             httpGet:
               path: {{ .Values.readinessProbe.path }}
-              port: {{ .Values.service.port }}
+              port: {{ .Values.container.port }}
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
 
           livenessProbe:
             httpGet:
               path: {{ .Values.livenessProbe.path }}
-              port: {{ .Values.service.port }}
+              port: {{ .Values.container.port }}
             initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
 
           resources:

@@ -1,2 +1,5 @@
 *.bak
 project_dump.txt
+fix.py
+dump.py
+project_dump.txt
