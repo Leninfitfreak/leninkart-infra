@@ -28,7 +28,7 @@ spec:
               value: "0"
 
             - name: KAFKA_CLUSTER_ID
-              value: "MkU3OEVBNTcwNTJENDM2Qk"
+              value: "cICOmzzYSGur9Qz-qJTksA"
 
             - name: KAFKA_CONTROLLER_QUORUM_VOTERS
               value: "0@kafka-0.kafka.dev.svc.cluster.local:9093"
