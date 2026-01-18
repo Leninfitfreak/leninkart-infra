@@ -4,8 +4,13 @@ metadata:
   name: kafka
   namespace: dev
 spec:
+  clusterIP: None
   selector:
     app: kafka
   ports:
-    - port: 9092
+    - name: broker
+      port: 9092
       targetPort: 9092
+    - name: controller
+      port: 9093
+      targetPort: 9093
