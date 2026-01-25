@@ -86,59 +86,66 @@ if __name__ == "__main__":
 
 ### FILE: fix.py
 ```
+import yaml
 from pathlib import Path
 
 INGRESS_FILE = Path("helm/ingress/templates/ingress.yaml")
 
-NEW_INGRESS = """apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: leninkart-ingress
-  namespace: {{ .Values.namespace }}
-  annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-spec:
-  ingressClassName: nginx
-  rules:
-  - http:
-      paths:
-      # PRODUCT SERVICE
-      - path: /api/products(/|$)(.*)
-        pathType: ImplementationSpecific
-        backend:
-          service:
-            name: leninkart-product-service
-            port:
-              number: 8081
-
-      # ORDER SERVICE
-      - path: /api/orders(/|$)(.*)
-        pathType: ImplementationSpecific
-        backend:
-          service:
-            name: leninkart-order-service
-            port:
-              number: 8080
-
-      # FRONTEND
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: leninkart-frontend
-            port:
-              number: 80
-"""
-
 def main():
-    if not INGRESS_FILE.exists():
-        raise FileNotFoundError(f"Ingress template not found: {INGRESS_FILE}")
+    ingress = {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "Ingress",
+        "metadata": {
+            "name": "leninkart-ingress"
+        },
+        "spec": {
+            "ingressClassName": "nginx",
+            "rules": [
+                {
+                    "http": {
+                        "paths": [
+                            {
+                                "path": "/api/products",
+                                "pathType": "Prefix",
+                                "backend": {
+                                    "service": {
+                                        "name": "product-service",
+                                        "port": {"number": 8080}
+                                    }
+                                }
+                            },
+                            {
+                                "path": "/api/orders",
+                                "pathType": "Prefix",
+                                "backend": {
+                                    "service": {
+                                        "name": "order-service",
+                                        "port": {"number": 8080}
+                                    }
+                                }
+                            },
+                            {
+                                "path": "/",
+                                "pathType": "Prefix",
+                                "backend": {
+                                    "service": {
+                                        "name": "frontend",
+                                        "port": {"number": 80}
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    }
 
-    INGRESS_FILE.write_text(NEW_INGRESS)
-    print("✅ Ingress updated with rewrite rules")
-    print("➡ Commit & push to dev branch")
-    print("➡ ArgoCD will auto-sync")
+    INGRESS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(INGRESS_FILE, "w") as f:
+        yaml.safe_dump(ingress, f, sort_keys=False)
+
+    print("✅ Ingress fixed (Prefix-safe, ArgoCD-safe)")
 
 if __name__ == "__main__":
     main()
@@ -577,15 +584,19 @@ version: 0.1.0
 ### FILE: helm\frontend\values-dev.yaml
 ```
 replicaCount: 1
+
 image:
   repository: leninfitfreak/frontend
-  tag: '21330320579'
+  tag: "21330320579"
   pullPolicy: IfNotPresent
+
 service:
   type: ClusterIP
-  port: 80 # ✅ nginx service port
+  port: 80
+
 container:
-  port: 80 # ✅ nginx container port
+  port: 80
+
 resources:
   requests:
     cpu: 100m
@@ -593,58 +604,22 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
+
 readinessProbe:
   httpGet:
     path: /
-    port: 80 # ✅ probe nginx, not react
+    port: 80
   initialDelaySeconds: 10
   periodSeconds: 10
   failureThreshold: 5
+
 livenessProbe:
   httpGet:
     path: /
-    port: 80 # ✅ probe nginx
+    port: 80
   initialDelaySeconds: 20
   periodSeconds: 15
   failureThreshold: 5
-```
-
-### FILE: helm\frontend\values.yaml
-```
-replicaCount: 1
-
-image:
-  repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/frontend
-  pullPolicy: IfNotPresent
-  tag: latest
-
-service:
-  type: ClusterIP
-  port: 80
-
-resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 300m
-    memory: 256Mi
-
-readinessProbe:
-  httpGet:
-    path: /health
-    port: 80
-  initialDelaySeconds: 30
-  periodSeconds: 10
-  failureThreshold: 3
-
-livenessProbe:
-  httpGet:
-    path: /health
-    port: 80
-  initialDelaySeconds: 60
-  periodSeconds: 10
-  failureThreshold: 6
 ```
 
 ### DIRECTORY: helm\frontend\templates/
@@ -654,18 +629,25 @@ livenessProbe:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: frontend
+  name: {{ include "frontend.fullname" . }}
   labels:
-    app: frontend
+    app.kubernetes.io/name: {{ include "frontend.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
 spec:
   replicas: {{ .Values.replicaCount }}
+
   selector:
     matchLabels:
-      app: frontend
+      app.kubernetes.io/name: {{ include "frontend.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+
   template:
     metadata:
       labels:
-        app: frontend
+        app.kubernetes.io/name: {{ include "frontend.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+
     spec:
       containers:
         - name: frontend
@@ -673,22 +655,28 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
           ports:
-            - containerPort: {{ .Values.container.port }}
+            - name: http
+              containerPort: {{ .Values.container.port }}
+              protocol: TCP
 
           readinessProbe:
             httpGet:
-              path: {{ .Values.readinessProbe.path }}
-              port: {{ .Values.container.port }}
+              path: {{ .Values.readinessProbe.httpGet.path }}
+              port: http
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
 
           livenessProbe:
             httpGet:
-              path: {{ .Values.livenessProbe.path }}
-              port: {{ .Values.container.port }}
+              path: {{ .Values.livenessProbe.httpGet.path }}
+              port: http
             initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
 
           resources:
-{{ toYaml .Values.resources | indent 12 }}
+            {{- toYaml .Values.resources | nindent 12 }}
 ```
 
 ### FILE: helm\frontend\templates\service.yaml
@@ -730,39 +718,30 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: leninkart-ingress
-  namespace: {{ .Values.namespace }}
-  annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
 spec:
   ingressClassName: nginx
   rules:
   - http:
       paths:
-      # PRODUCT SERVICE
-      - path: /api/products(/|$)(.*)
-        pathType: ImplementationSpecific
+      - path: /api/products
+        pathType: Prefix
         backend:
           service:
-            name: leninkart-product-service
-            port:
-              number: 8081
-
-      # ORDER SERVICE
-      - path: /api/orders(/|$)(.*)
-        pathType: ImplementationSpecific
-        backend:
-          service:
-            name: leninkart-order-service
+            name: product-service
             port:
               number: 8080
-
-      # FRONTEND
+      - path: /api/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: order-service
+            port:
+              number: 8080
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: leninkart-frontend
+            name: frontend
             port:
               number: 80
 ```
