@@ -1,18 +1,25 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: frontend
+  name: {{ include "frontend.fullname" . }}
   labels:
-    app: frontend
+    app.kubernetes.io/name: {{ include "frontend.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
 spec:
   replicas: {{ .Values.replicaCount }}
+
   selector:
     matchLabels:
-      app: frontend
+      app.kubernetes.io/name: {{ include "frontend.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+
   template:
     metadata:
       labels:
-        app: frontend
+        app.kubernetes.io/name: {{ include "frontend.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+
     spec:
       containers:
         - name: frontend
@@ -20,19 +27,25 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
           ports:
-            - containerPort: {{ .Values.container.port }}
+            - name: http
+              containerPort: {{ .Values.container.port }}
+              protocol: TCP
 
           readinessProbe:
             httpGet:
-              path: {{ .Values.readinessProbe.path }}
-              port: {{ .Values.container.port }}
+              path: {{ .Values.readinessProbe.httpGet.path }}
+              port: http
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
 
           livenessProbe:
             httpGet:
-              path: {{ .Values.livenessProbe.path }}
-              port: {{ .Values.container.port }}
+              path: {{ .Values.livenessProbe.httpGet.path }}
+              port: http
             initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
 
           resources:
-{{ toYaml .Values.resources | indent 12 }}
+            {{- toYaml .Values.resources | nindent 12 }}
