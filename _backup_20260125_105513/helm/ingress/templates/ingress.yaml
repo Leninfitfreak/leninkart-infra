@@ -3,6 +3,8 @@ kind: Ingress
 metadata:
   name: leninkart-ingress
   namespace: {{ .Values.namespace }}
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
 spec:
   ingressClassName: nginx
   rules:
