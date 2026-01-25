@@ -10,7 +10,6 @@ spec:
   rules:
   - http:
       paths:
-
       # ---------- PRODUCT SERVICE ----------
       - path: /api/products(/|$)(.*)
         pathType: ImplementationSpecific
