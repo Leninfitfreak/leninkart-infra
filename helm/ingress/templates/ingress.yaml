@@ -2,38 +2,31 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: leninkart-ingress
-  namespace: {{ .Values.namespace }}
   annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: /$2
 spec:
   ingressClassName: nginx
   rules:
   - http:
       paths:
-      # PRODUCT SERVICE
       - path: /api/products(/|$)(.*)
-        pathType: ImplementationSpecific
+        pathType: Prefix
         backend:
           service:
-            name: leninkart-product-service
-            port:
-              number: 8081
-
-      # ORDER SERVICE
-      - path: /api/orders(/|$)(.*)
-        pathType: ImplementationSpecific
-        backend:
-          service:
-            name: leninkart-order-service
+            name: product-service
             port:
               number: 8080
-
-      # FRONTEND
+      - path: /api/orders(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: order-service
+            port:
+              number: 8080
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: leninkart-frontend
+            name: frontend
             port:
               number: 80
