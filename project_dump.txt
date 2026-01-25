@@ -579,7 +579,7 @@ version: 0.1.0
 replicaCount: 1
 image:
   repository: leninfitfreak/frontend
-  tag: '21330320579'
+  tag: '21112742373'
   pullPolicy: IfNotPresent
 service:
   type: ClusterIP
@@ -817,38 +817,30 @@ version: 0.1.0
 ### FILE: helm\order-service\values-dev.yaml
 ```
 replicaCount: 1
-
 image:
   repository: leninfitfreak/order-service
-  tag: "21331983687"
+  tag: "21113048591"
   pullPolicy: IfNotPresent
-
 service:
   port: 8080
-
 startupProbe:
-  tcpSocket:
-    port: http
-  initialDelaySeconds: 10
-  periodSeconds: 5
-  failureThreshold: 60
-
+  httpGet:
+    path: /actuator/health
+  initialDelaySeconds: 120
+  periodSeconds: 10
+  failureThreshold: 40
 readinessProbe:
   httpGet:
     path: /actuator/health/readiness
-    port: 8080
   initialDelaySeconds: 30
   periodSeconds: 10
   failureThreshold: 6
-
 livenessProbe:
   httpGet:
     path: /actuator/health/liveness
-    port: 8080
   initialDelaySeconds: 60
   periodSeconds: 20
   failureThreshold: 10
-
 resources:
   requests:
     cpu: 100m
@@ -856,22 +848,13 @@ resources:
   limits:
     cpu: 300m
     memory: 256Mi
-
 env:
-  # ---------- DATABASE ----------
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
   SPRING_DATASOURCE_USERNAME: postgres
   SPRING_DATASOURCE_PASSWORD: postgres
   SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
-  SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "60000"
-
-  # ---------- KAFKA ----------
-  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-0.kafka.dev.svc.cluster.local:9092
-
-  # ---------- ACTUATOR (CRITICAL FIX) ----------
-  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
-  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+  SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: '60000'
 ```
 
 ### DIRECTORY: helm\order-service\templates/
@@ -929,54 +912,51 @@ spec:
     spec:
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
 
           ports:
             - name: http
-              containerPort: {{ .Values.service.port }}
+              containerPort: {{ .Values.service.port | default 8080 }}
               protocol: TCP
 
-          # ---------------- STARTUP PROBE (SAFE) ----------------
+          # -------------------- STARTUP PROBE --------------------
           startupProbe:
-{{- if .Values.startupProbe.httpGet }}
             httpGet:
               path: {{ .Values.startupProbe.httpGet.path }}
               port: http
-{{- else if .Values.startupProbe.tcpSocket }}
-            tcpSocket:
-              port: http
-{{- end }}
             initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.startupProbe.periodSeconds }}
             failureThreshold: {{ .Values.startupProbe.failureThreshold }}
 
-          # ---------------- READINESS PROBE ----------------
+          # -------------------- READINESS PROBE --------------------
           readinessProbe:
             httpGet:
               path: {{ .Values.readinessProbe.httpGet.path }}
               port: http
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds | default 5 }}
             failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
 
-          # ---------------- LIVENESS PROBE ----------------
+          # -------------------- LIVENESS PROBE --------------------
           livenessProbe:
             httpGet:
               path: {{ .Values.livenessProbe.httpGet.path }}
               port: http
             initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds | default 5 }}
             failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
 
           resources:
-{{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.resources | nindent 12 }}
 
           env:
-{{- range $key, $value := .Values.env }}
+          {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
-{{- end }}
+          {{- end }}
 ```
 
 ### FILE: helm\order-service\templates\service.yaml
@@ -991,9 +971,8 @@ spec:
     app.kubernetes.io/name: order-service
     app.kubernetes.io/instance: dev-order-service
   ports:
-    - name: http              # ✅ REQUIRED
-      port: {{ .Values.service.port }}
-      targetPort: http        # maps to containerPort name
+    - port: {{ .Values.service.port }}
+      targetPort: http
 ```
 
 ### DIRECTORY: helm\product-service/
@@ -1126,8 +1105,10 @@ spec:
   ports:
     - name: broker
       port: 9092
+      targetPort: 9092
     - name: controller
       port: 9093
+      targetPort: 9093
 ```
 
 ### FILE: k8s\kafka\kafka.yaml
@@ -1151,29 +1132,27 @@ spec:
       containers:
         - name: kafka
           image: confluentinc/cp-kafka:7.5.0
-
           ports:
             - containerPort: 9092
             - containerPort: 9093
-
           env:
             - name: KAFKA_PROCESS_ROLES
-              value: "broker,controller"
+              value: "controller,broker"
 
             - name: KAFKA_NODE_ID
-              value: "1"
+              value: "0"
 
             - name: CLUSTER_ID
               value: "cICOmzzYSGur9Qz-qJTksA"
 
             - name: KAFKA_CONTROLLER_QUORUM_VOTERS
-              value: "1@kafka-0.kafka.dev.svc.cluster.local:9093"
+              value: "0@kafka-0.kafka.dev.svc.cluster.local:9093"
 
             - name: KAFKA_LISTENERS
               value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
 
             - name: KAFKA_ADVERTISED_LISTENERS
-              value: "PLAINTEXT://kafka.dev.svc.cluster.local:9092"
+              value: "PLAINTEXT://kafka-0.kafka.dev.svc.cluster.local:9092"
 
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
               value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
@@ -1195,8 +1174,7 @@ spec:
     - metadata:
         name: kafka-data
       spec:
-        accessModes:
-          - ReadWriteOnce
+        accessModes: ["ReadWriteOnce"]
         resources:
           requests:
             storage: 5Gi
