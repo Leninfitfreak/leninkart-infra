@@ -16,53 +16,51 @@ spec:
     spec:
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
 
           ports:
             - name: http
-              containerPort: {{ .Values.service.port | default 8080 }}
+              containerPort: {{ .Values.service.port }}
               protocol: TCP
 
-          # -------------------- STARTUP PROBE (FIXED) --------------------
+          # ---------------- STARTUP PROBE (SAFE) ----------------
           startupProbe:
-          {{- if .Values.startupProbe.httpGet }}
+{{- if .Values.startupProbe.httpGet }}
             httpGet:
               path: {{ .Values.startupProbe.httpGet.path }}
               port: http
-          {{- else if .Values.startupProbe.tcpSocket }}
+{{- else if .Values.startupProbe.tcpSocket }}
             tcpSocket:
               port: http
-          {{- end }}
+{{- end }}
             initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.startupProbe.periodSeconds }}
             failureThreshold: {{ .Values.startupProbe.failureThreshold }}
 
-          # -------------------- READINESS PROBE --------------------
+          # ---------------- READINESS PROBE ----------------
           readinessProbe:
             httpGet:
               path: {{ .Values.readinessProbe.httpGet.path }}
               port: http
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
-            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds | default 5 }}
             failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
 
-          # -------------------- LIVENESS PROBE --------------------
+          # ---------------- LIVENESS PROBE ----------------
           livenessProbe:
             httpGet:
               path: {{ .Values.livenessProbe.httpGet.path }}
               port: http
             initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
-            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds | default 5 }}
             failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
 
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+{{- toYaml .Values.resources | nindent 12 }}
 
           env:
-          {{- range $key, $value := .Values.env }}
+{{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
-          {{- end }}
+{{- end }}
