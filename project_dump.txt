@@ -90,9 +90,12 @@ from pathlib import Path
 import shutil
 
 ROOT = Path(".")
+
+# ---- Paths ----
 HELM_INGRESS = ROOT / "helm" / "ingress"
 TEMPLATES = HELM_INGRESS / "templates"
 ARGO_APP = ROOT / "argocd" / "applications" / "dev" / "ingress.yaml"
+BACKUP_DIR = ROOT / "_ingress_backup"
 
 OLD_INGRESS_FILES = [
     "leninkart-ingress.yaml",
@@ -100,30 +103,50 @@ OLD_INGRESS_FILES = [
     "leninkart-frontend-ingress.yaml"
 ]
 
-def cleanup_old_ingress():
-    for f in OLD_INGRESS_FILES:
-        path = ROOT / f
-        if path.exists():
-            shutil.move(str(path), str(path) + ".bak")
-            print(f"🗑️  Disabled old ingress: {f}")
+# ---- Helpers ----
+def backup_file(path: Path):
+    BACKUP_DIR.mkdir(exist_ok=True)
+    target = BACKUP_DIR / path.name
+    if not target.exists():
+        shutil.move(str(path), str(target))
+        print(f"🗑️  Moved old ingress → {target}")
+    else:
+        print(f"⚠️  Backup already exists, skipping: {path.name}")
 
+# ---- Step 1: Cleanup old ingress ----
+def cleanup_old_ingress():
+    print("🔍 Cleaning legacy ingress manifests...")
+    for name in OLD_INGRESS_FILES:
+        path = ROOT / name
+        if path.exists():
+            backup_file(path)
+
+# ---- Step 2: Create Helm ingress chart ----
 def create_helm_chart():
+    print("📦 Creating Helm ingress chart...")
+
+    if HELM_INGRESS.exists():
+        print("⚠️  helm/ingress already exists — skipping creation")
+        return
+
     TEMPLATES.mkdir(parents=True, exist_ok=True)
 
-    (HELM_INGRESS / "Chart.yaml").write_text("""\
-apiVersion: v2
+    (HELM_INGRESS / "Chart.yaml").write_text(
+"""apiVersion: v2
 name: ingress
 description: LeninKart Ingress
 type: application
 version: 0.1.0
-""")
+"""
+    )
 
-    (HELM_INGRESS / "values-dev.yaml").write_text("""\
-namespace: dev
-""")
+    (HELM_INGRESS / "values-dev.yaml").write_text(
+"""namespace: dev
+"""
+    )
 
-    (TEMPLATES / "ingress.yaml").write_text("""\
-apiVersion: networking.k8s.io/v1
+    (TEMPLATES / "ingress.yaml").write_text(
+"""apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: leninkart-ingress
@@ -156,13 +179,21 @@ spec:
             name: leninkart-frontend
             port:
               number: 80
-""")
+"""
+    )
 
     print("✅ Helm ingress chart created")
 
+# ---- Step 3: Create ArgoCD Application ----
 def create_argocd_app():
-    ARGO_APP.write_text("""\
-apiVersion: argoproj.io/v1alpha1
+    print("🧭 Creating ArgoCD ingress application...")
+
+    if ARGO_APP.exists():
+        print("⚠️  ArgoCD ingress app already exists — skipping")
+        return
+
+    ARGO_APP.write_text(
+"""apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: dev-ingress
@@ -183,17 +214,20 @@ spec:
     automated:
       prune: true
       selfHeal: true
-""")
+"""
+    )
+
     print("✅ ArgoCD ingress application created")
 
+# ---- Main ----
 def main():
-    print("🚀 Enabling GitOps-managed ingress...")
+    print("🚀 Enabling GitOps-managed Ingress (SAFE MODE)")
     cleanup_old_ingress()
     create_helm_chart()
     create_argocd_app()
     print("\n✅ DONE")
-    print("➡️  Commit & push to dev branch")
-    print("➡️  ArgoCD will auto-sync ingress")
+    print("➡️ Commit & push to dev branch")
+    print("➡️ ArgoCD will reconcile ingress automatically")
 
 if __name__ == "__main__":
     main()
@@ -255,199 +289,6 @@ image:
 service:
   type: ClusterIP
   port: 8081
-```
-
-### FILE: leninkart-ingress.yaml
-```
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: leninkart-ingress
-  namespace: dev
-spec:
-  ingressClassName: nginx
-  rules:
-  - http:
-      paths:
-      - path: /api/products
-        pathType: Prefix
-        backend:
-          service:
-            name: leninkart-product-service
-            port:
-              number: 8081
-
-      - path: /api/orders
-        pathType: Prefix
-        backend:
-          service:
-            name: leninkart-order-service
-            port:
-              number: 8080
-
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: leninkart-frontend
-            port:
-              number: 80
-```
-
-### FILE: leninkart-ingress.yaml.bak
-```
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: leninkart-ingress
-  namespace: dev
-spec:
-  ingressClassName: nginx
-  rules:
-  - http:
-      paths:
-      - path: /api/products
-        pathType: Prefix
-        backend:
-          service:
-            name: leninkart-product-service
-            port:
-              number: 8081
-      - path: /api/orders
-        pathType: Prefix
-        backend:
-          service:
-            name: leninkart-order-service
-            port:
-              number: 8080
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: leninkart-frontend
-            port:
-              number: 3000
-```
-
-### FILE: leninkart-ingress.yaml.bak-final
-```
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: leninkart-ingress
-  namespace: dev
-  annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$1
-spec:
-  ingressClassName: nginx
-  rules:
-  - http:
-      paths:
-      # ---- PRODUCT SERVICE ----
-      - path: /api/products/?(.*)
-        pathType: ImplementationSpecific
-        backend:
-          service:
-            name: leninkart-product-service
-            port:
-              number: 8081
-
-      # ---- ORDER SERVICE ----
-      - path: /api/orders/?(.*)
-        pathType: ImplementationSpecific
-        backend:
-          service:
-            name: leninkart-order-service
-            port:
-              number: 8080
-
-      # ---- FRONTEND (NO REWRITE) ----
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: leninkart-frontend
-            port:
-              number: 80
-```
-
-### FILE: leninkart-ingress.yaml.bak2
-```
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: leninkart-ingress
-  namespace: dev
-spec:
-  ingressClassName: nginx
-  rules:
-  - http:
-      paths:
-      - path: /api/products
-        pathType: Prefix
-        backend:
-          service:
-            name: leninkart-product-service
-            port:
-              number: 8081
-      - path: /api/orders
-        pathType: Prefix
-        backend:
-          service:
-            name: leninkart-order-service
-            port:
-              number: 8080
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: leninkart-frontend
-            port:
-              number: 3000
-```
-
-### FILE: leninkart-ingress.yaml.bak_auto
-```
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: leninkart-ingress
-  namespace: dev
-  annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$1
-spec:
-  ingressClassName: nginx
-  rules:
-  - http:
-      paths:
-      # ---- PRODUCT SERVICE ----
-      - path: /api/products/?(.*)
-        pathType: ImplementationSpecific
-        backend:
-          service:
-            name: leninkart-product-service
-            port:
-              number: 8081
-
-      # ---- ORDER SERVICE ----
-      - path: /api/orders/?(.*)
-        pathType: ImplementationSpecific
-        backend:
-          service:
-            name: leninkart-order-service
-            port:
-              number: 8080
-
-      # ---- FRONTEND (NO REWRITE) ----
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: leninkart-frontend
-            port:
-              number: 80
 ```
 
 ### FILE: project_dump.txt
@@ -544,6 +385,31 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+```
+
+### FILE: argocd\applications\dev\ingress.yaml
+```
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dev-ingress
+  namespace: argocd
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: helm/ingress
+    helm:
+      valueFiles:
+        - values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
 ```
 
 ### FILE: argocd\applications\dev\kafka.yaml
@@ -838,41 +704,6 @@ livenessProbe:
   failureThreshold: 5
 ```
 
-### FILE: helm\frontend\values-dev.yaml.bak
-```
-replicaCount: 1
-image:
-  repository: leninfitfreak/frontend
-  tag: '21096391668'
-  pullPolicy: IfNotPresent
-service:
-  type: ClusterIP
-  port: 3000
-container:
-  port: 3000
-resources:
-  requests:
-    cpu: 100m
-    memory: 256Mi
-  limits:
-    cpu: 500m
-    memory: 512Mi
-readinessProbe:
-  httpGet:
-    path: /
-    port: 3000
-  initialDelaySeconds: 30
-  periodSeconds: 10
-  failureThreshold: 5
-livenessProbe:
-  httpGet:
-    path: /
-    port: 3000
-  initialDelaySeconds: 60
-  periodSeconds: 15
-  failureThreshold: 10
-```
-
 ### FILE: helm\frontend\values.yaml
 ```
 replicaCount: 1
@@ -970,19 +801,59 @@ spec:
       targetPort: {{ .Values.service.port }}
 ```
 
-### FILE: helm\frontend\templates\service.yaml.bak
+### DIRECTORY: helm\ingress/
+
+### FILE: helm\ingress\Chart.yaml
 ```
-apiVersion: v1
-kind: Service
+apiVersion: v2
+name: ingress
+description: LeninKart Ingress
+type: application
+version: 0.1.0
+```
+
+### FILE: helm\ingress\values-dev.yaml
+```
+namespace: dev
+```
+
+### DIRECTORY: helm\ingress\templates/
+
+### FILE: helm\ingress\templates\ingress.yaml
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
 metadata:
-  name: frontend
+  name: leninkart-ingress
+  namespace: {{ .Values.namespace }}
 spec:
-  type: {{ .Values.service.type }}
-  selector:
-    app: frontend
-  ports:
-    - port: {{ .Values.service.port }}
-      targetPort: {{ .Values.service.port }}
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /api/products
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-product-service
+            port:
+              number: 8081
+
+      - path: /api/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 80
 ```
 
 ### DIRECTORY: helm\order-service/
@@ -1010,49 +881,6 @@ startupProbe:
   initialDelaySeconds: 120
   periodSeconds: 10
   failureThreshold: 40
-readinessProbe:
-  httpGet:
-    path: /actuator/health/readiness
-  initialDelaySeconds: 30
-  periodSeconds: 10
-  failureThreshold: 6
-livenessProbe:
-  httpGet:
-    path: /actuator/health/liveness
-  initialDelaySeconds: 60
-  periodSeconds: 20
-  failureThreshold: 10
-resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 300m
-    memory: 256Mi
-env:
-  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
-  SPRING_DATASOURCE_USERNAME: postgres
-  SPRING_DATASOURCE_PASSWORD: postgres
-  SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
-  SPRING_JPA_HIBERNATE_DDL_AUTO: update
-  SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: '60000'
-```
-
-### FILE: helm\order-service\values-dev.yaml.bak
-```
-replicaCount: 1
-image:
-  repository: leninfitfreak/order-service
-  tag: '21090067717'
-  pullPolicy: IfNotPresent
-service:
-  port: 8080
-startupProbe:
-  httpGet:
-    path: /actuator/health
-  initialDelaySeconds: 60
-  periodSeconds: 10
-  failureThreshold: 30
 readinessProbe:
   httpGet:
     path: /actuator/health/readiness
@@ -1199,22 +1027,6 @@ spec:
       targetPort: http
 ```
 
-### FILE: helm\order-service\templates\service.yaml.bak
-```
-apiVersion: v1
-kind: Service
-metadata:
-  name: order-service
-spec:
-  type: {{ .Values.service.type }}
-  selector:
-    app.kubernetes.io/name: order-service
-    app.kubernetes.io/instance: {{ .Release.Name }}
-  ports:
-    - port: {{ .Values.service.port }}
-      targetPort: http
-```
-
 ### DIRECTORY: helm\product-service/
 
 ### FILE: helm\product-service\Chart.yaml
@@ -1274,62 +1086,6 @@ env:
   SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: 'true'
 ```
 
-### FILE: helm\product-service\values-dev.yaml.bak
-```
-replicaCount: 1
-
-image:
-  repository: leninfitfreak/product-service
-  tag: "21089937961"
-  pullPolicy: IfNotPresent
-
-service:
-  type: ClusterIP
-  port: 8081
-
-resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 300m
-    memory: 256Mi
-
-startupProbe:
-  httpGet:
-    path: /actuator/health
-    port: 8081
-  initialDelaySeconds: 60
-  periodSeconds: 10
-  failureThreshold: 30
-
-readinessProbe:
-  httpGet:
-    path: /actuator/health
-    port: 8081
-  initialDelaySeconds: 30
-  periodSeconds: 10
-  failureThreshold: 6
-
-livenessProbe:
-  httpGet:
-    path: /actuator/health
-    port: 8081
-  initialDelaySeconds: 60
-  periodSeconds: 20
-  failureThreshold: 10
-
-env:
-  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
-  SPRING_DATASOURCE_USERNAME: postgres
-  SPRING_DATASOURCE_PASSWORD: postgres
-  SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-
-  SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
-  SPRING_JPA_HIBERNATE_DDL_AUTO: update
-  SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
-```
-
 ### DIRECTORY: helm\product-service\templates/
 
 ### FILE: helm\product-service\templates\deployment.yaml
@@ -1378,21 +1134,6 @@ spec:
       targetPort: {{ .Values.service.port }}
 ```
 
-### FILE: helm\product-service\templates\service.yaml.bak
-```
-apiVersion: v1
-kind: Service
-metadata:
-  name: product-service
-spec:
-  type: {{ .Values.service.type | default "ClusterIP" }}
-  selector:
-    app: product-service
-  ports:
-    - port: {{ .Values.service.port }}
-      targetPort: {{ .Values.service.port }}
-```
-
 ### DIRECTORY: k8s/
 
 ### DIRECTORY: k8s\kafka/
@@ -1420,21 +1161,6 @@ spec:
     - name: controller
       port: 9093
       targetPort: 9093
-```
-
-### FILE: k8s\kafka\kafka-service.yaml.bak
-```
-apiVersion: v1
-kind: Service
-metadata:
-  name: kafka
-  namespace: dev
-spec:
-  selector:
-    app: kafka
-  ports:
-    - port: 9092
-      targetPort: 9092
 ```
 
 ### FILE: k8s\kafka\kafka.yaml
@@ -1504,139 +1230,6 @@ spec:
         resources:
           requests:
             storage: 5Gi
-```
-
-### FILE: k8s\kafka\kafka.yaml.bak
-```
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: kafka
-  namespace: dev
-spec:
-  serviceName: kafka
-  replicas: 1
-  selector:
-    matchLabels:
-      app: kafka
-  template:
-    metadata:
-      labels:
-        app: kafka
-    spec:
-      containers:
-        - name: kafka
-          image: confluentinc/cp-kafka:7.5.0
-          ports:
-            - containerPort: 9092
-            - containerPort: 9093
-          env:
-            - name: KAFKA_PROCESS_ROLES
-              value: "broker,controller"
-
-            - name: KAFKA_NODE_ID
-              value: "1"
-
-            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
-              value: "1@kafka-0.kafka.dev.svc.cluster.local:9093"
-
-            - name: KAFKA_LISTENERS
-              value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
-
-            - name: KAFKA_ADVERTISED_LISTENERS
-              value: "PLAINTEXT://kafka.dev.svc.cluster.local:9092"
-
-            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
-              value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
-
-            - name: KAFKA_INTER_BROKER_LISTENER_NAME
-              value: "PLAINTEXT"
-
-            - name: KAFKA_CONTROLLER_LISTENER_NAMES
-              value: "CONTROLLER"
-
-            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
-              value: "1"
-
-            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
-              value: "1"
-
-            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
-              value: "1"
-
-            - name: KAFKA_LOG_DIRS
-              value: "/var/lib/kafka/data"
-
-          volumeMounts:
-            - name: kafka-data
-              mountPath: /var/lib/kafka/data
-
-  volumeClaimTemplates:
-    - metadata:
-        name: kafka-data
-      spec:
-        accessModes: ["ReadWriteOnce"]
-        resources:
-          requests:
-            storage: 5Gi
-```
-
-### FILE: k8s\kafka\zookeeper-service.yaml.bak
-```
-apiVersion: v1
-kind: Service
-metadata:
-  name: zookeeper
-  namespace: dev
-spec:
-  clusterIP: None
-  selector:
-    app: zookeeper
-  ports:
-    - name: client
-      port: 2181
-      targetPort: 2181
-```
-
-### FILE: k8s\kafka\zookeeper.yaml.bak
-```
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: zookeeper
-  namespace: dev
-spec:
-  serviceName: zookeeper
-  replicas: 1
-  selector:
-    matchLabels:
-      app: zookeeper
-  template:
-    metadata:
-      labels:
-        app: zookeeper
-    spec:
-      containers:
-        - name: zookeeper
-          image: confluentinc/cp-zookeeper:7.5.0
-          ports:
-            - containerPort: 2181
-          env:
-            - name: ZOOKEEPER_CLIENT_PORT
-              value: "2181"
-            - name: ZOOKEEPER_TICK_TIME
-              value: "2000"
-          volumeMounts:
-            - name: zk-data
-              mountPath: /var/lib/zookeeper
-  volumeClaimTemplates:
-    - metadata:
-        name: zk-data
-      spec:
-        accessModes: ["ReadWriteOnce"]
-        resources:
-          requests:
-            storage: 2Gi
 ```
 
 ### DIRECTORY: k8s\postgres/
@@ -1730,6 +1323,510 @@ spec:
             storage: 8Gi
 ```
 
+### DIRECTORY: _cleanup_backup/
+
+### FILE: _cleanup_backup\leninkart-ingress.yaml.bak
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-ingress
+  namespace: dev
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /api/products
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-product-service
+            port:
+              number: 8081
+      - path: /api/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 3000
+```
+
+### FILE: _cleanup_backup\leninkart-ingress.yaml.bak-final
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-ingress
+  namespace: dev
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      # ---- PRODUCT SERVICE ----
+      - path: /api/products/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: leninkart-product-service
+            port:
+              number: 8081
+
+      # ---- ORDER SERVICE ----
+      - path: /api/orders/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+
+      # ---- FRONTEND (NO REWRITE) ----
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 80
+```
+
+### FILE: _cleanup_backup\leninkart-ingress.yaml.bak2
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-ingress
+  namespace: dev
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /api/products
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-product-service
+            port:
+              number: 8081
+      - path: /api/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 3000
+```
+
+### FILE: _cleanup_backup\leninkart-ingress.yaml.bak_auto
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-ingress
+  namespace: dev
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      # ---- PRODUCT SERVICE ----
+      - path: /api/products/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: leninkart-product-service
+            port:
+              number: 8081
+
+      # ---- ORDER SERVICE ----
+      - path: /api/orders/?(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+
+      # ---- FRONTEND (NO REWRITE) ----
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 80
+```
+
+### DIRECTORY: _cleanup_backup\helm/
+
+### DIRECTORY: _cleanup_backup\helm\frontend/
+
+### FILE: _cleanup_backup\helm\frontend\values-dev.yaml.bak
+```
+replicaCount: 1
+image:
+  repository: leninfitfreak/frontend
+  tag: '21096391668'
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 3000
+container:
+  port: 3000
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+readinessProbe:
+  httpGet:
+    path: /
+    port: 3000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 5
+livenessProbe:
+  httpGet:
+    path: /
+    port: 3000
+  initialDelaySeconds: 60
+  periodSeconds: 15
+  failureThreshold: 10
+```
+
+### DIRECTORY: _cleanup_backup\helm\frontend\templates/
+
+### FILE: _cleanup_backup\helm\frontend\templates\service.yaml.bak
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: frontend
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.port }}
+```
+
+### DIRECTORY: _cleanup_backup\helm\order-service/
+
+### FILE: _cleanup_backup\helm\order-service\values-dev.yaml.bak
+```
+replicaCount: 1
+image:
+  repository: leninfitfreak/order-service
+  tag: '21090067717'
+  pullPolicy: IfNotPresent
+service:
+  port: 8080
+startupProbe:
+  httpGet:
+    path: /actuator/health
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  failureThreshold: 30
+readinessProbe:
+  httpGet:
+    path: /actuator/health/readiness
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 6
+livenessProbe:
+  httpGet:
+    path: /actuator/health/liveness
+  initialDelaySeconds: 60
+  periodSeconds: 20
+  failureThreshold: 10
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
+env:
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
+  SPRING_DATASOURCE_USERNAME: postgres
+  SPRING_DATASOURCE_PASSWORD: postgres
+  SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+  SPRING_JPA_HIBERNATE_DDL_AUTO: update
+  SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: '60000'
+```
+
+### DIRECTORY: _cleanup_backup\helm\order-service\templates/
+
+### FILE: _cleanup_backup\helm\order-service\templates\service.yaml.bak
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app.kubernetes.io/name: order-service
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+```
+
+### DIRECTORY: _cleanup_backup\helm\product-service/
+
+### FILE: _cleanup_backup\helm\product-service\values-dev.yaml.bak
+```
+replicaCount: 1
+
+image:
+  repository: leninfitfreak/product-service
+  tag: "21089937961"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8081
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
+
+startupProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8081
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  failureThreshold: 30
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8081
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 6
+
+livenessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8081
+  initialDelaySeconds: 60
+  periodSeconds: 20
+  failureThreshold: 10
+
+env:
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
+  SPRING_DATASOURCE_USERNAME: postgres
+  SPRING_DATASOURCE_PASSWORD: postgres
+  SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+
+  SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+  SPRING_JPA_HIBERNATE_DDL_AUTO: update
+  SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
+```
+
+### DIRECTORY: _cleanup_backup\helm\product-service\templates/
+
+### FILE: _cleanup_backup\helm\product-service\templates\service.yaml.bak
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+spec:
+  type: {{ .Values.service.type | default "ClusterIP" }}
+  selector:
+    app: product-service
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.port }}
+```
+
+### DIRECTORY: _cleanup_backup\k8s/
+
+### DIRECTORY: _cleanup_backup\k8s\kafka/
+
+### FILE: _cleanup_backup\k8s\kafka\kafka-service.yaml.bak
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: dev
+spec:
+  selector:
+    app: kafka
+  ports:
+    - port: 9092
+      targetPort: 9092
+```
+
+### FILE: _cleanup_backup\k8s\kafka\kafka.yaml.bak
+```
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: dev
+spec:
+  serviceName: kafka
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+        - name: kafka
+          image: confluentinc/cp-kafka:7.5.0
+          ports:
+            - containerPort: 9092
+            - containerPort: 9093
+          env:
+            - name: KAFKA_PROCESS_ROLES
+              value: "broker,controller"
+
+            - name: KAFKA_NODE_ID
+              value: "1"
+
+            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+              value: "1@kafka-0.kafka.dev.svc.cluster.local:9093"
+
+            - name: KAFKA_LISTENERS
+              value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
+
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: "PLAINTEXT://kafka.dev.svc.cluster.local:9092"
+
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+
+            - name: KAFKA_LOG_DIRS
+              value: "/var/lib/kafka/data"
+
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /var/lib/kafka/data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: kafka-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+```
+
+### FILE: _cleanup_backup\k8s\kafka\zookeeper-service.yaml.bak
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+  namespace: dev
+spec:
+  clusterIP: None
+  selector:
+    app: zookeeper
+  ports:
+    - name: client
+      port: 2181
+      targetPort: 2181
+```
+
+### FILE: _cleanup_backup\k8s\kafka\zookeeper.yaml.bak
+```
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zookeeper
+  namespace: dev
+spec:
+  serviceName: zookeeper
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      containers:
+        - name: zookeeper
+          image: confluentinc/cp-zookeeper:7.5.0
+          ports:
+            - containerPort: 2181
+          env:
+            - name: ZOOKEEPER_CLIENT_PORT
+              value: "2181"
+            - name: ZOOKEEPER_TICK_TIME
+              value: "2000"
+          volumeMounts:
+            - name: zk-data
+              mountPath: /var/lib/zookeeper
+  volumeClaimTemplates:
+    - metadata:
+        name: zk-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+```
+
 ### DIRECTORY: _ingress_backup/
 
 ### FILE: _ingress_backup\leninkart-api-ingress.yaml
@@ -1776,6 +1873,43 @@ spec:
   rules:
   - http:
       paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 80
+```
+
+### FILE: _ingress_backup\leninkart-ingress.yaml
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-ingress
+  namespace: dev
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /api/products
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-product-service
+            port:
+              number: 8081
+
+      - path: /api/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+
       - path: /
         pathType: Prefix
         backend:
