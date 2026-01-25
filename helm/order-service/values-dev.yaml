@@ -8,6 +8,13 @@ image:
 service:
   port: 8080
 
+startupProbe:
+  tcpSocket:
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  failureThreshold: 60
+
 readinessProbe:
   httpGet:
     path: /actuator/health/readiness
