@@ -11,8 +11,8 @@ spec:
   - http:
       paths:
       # ---------- PRODUCT SERVICE ----------
-      - path: /api/products
-        pathType: Prefix
+      - path: /api/products(/|$)(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: leninkart-product-service
@@ -20,8 +20,8 @@ spec:
               number: 8081
 
       # ---------- ORDER SERVICE ----------
-      - path: /api/orders
-        pathType: Prefix
+      - path: /api/orders(/|$)(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: leninkart-order-service
