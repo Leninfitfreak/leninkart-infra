@@ -1,39 +1,72 @@
 from pathlib import Path
+import re
 
-INGRESS_FILE = Path("helm/ingress/templates/ingress.yaml")
+ROOT = Path(".")
 
-NEW_INGRESS = """apiVersion: networking.k8s.io/v1
+def replace(file, old, new):
+    text = file.read_text()
+    if old in text:
+        file.write_text(text.replace(old, new))
+
+def fix_frontend_service():
+    f = ROOT / "helm/frontend/templates/service.yaml"
+    replace(f,
+        "targetPort: {{ .Values.service.port }}",
+        "targetPort: http"
+    )
+
+def fix_frontend_deployment():
+    f = ROOT / "helm/frontend/templates/deployment.yaml"
+    text = f.read_text()
+    if "name: http" not in text:
+        text = text.replace(
+            "ports:\n            - containerPort:",
+            "ports:\n            - name: http\n              containerPort:"
+        )
+    text = re.sub(r"path: .*", "path: /", text)
+    f.write_text(text)
+
+def fix_order_service_selector():
+    f = ROOT / "helm/order-service/templates/service.yaml"
+    text = f.read_text()
+    text = re.sub(
+        r"selector:[\s\S]*?ports:",
+        """selector:
+    app.kubernetes.io/name: {{ include "order-service.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:""",
+        text
+    )
+    f.write_text(text)
+
+def fix_ingress():
+    f = ROOT / "helm/ingress/templates/ingress.yaml"
+    f.write_text("""apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: leninkart-ingress
   namespace: {{ .Values.namespace }}
-  annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
 spec:
   ingressClassName: nginx
   rules:
   - http:
       paths:
-      # PRODUCT SERVICE
-      - path: /api/products(/|$)(.*)
-        pathType: ImplementationSpecific
+      - path: /api/products
+        pathType: Prefix
         backend:
           service:
             name: leninkart-product-service
             port:
               number: 8081
 
-      # ORDER SERVICE
-      - path: /api/orders(/|$)(.*)
-        pathType: ImplementationSpecific
+      - path: /api/orders
+        pathType: Prefix
         backend:
           service:
             name: leninkart-order-service
             port:
               number: 8080
 
-      # FRONTEND
       - path: /
         pathType: Prefix
         backend:
@@ -41,16 +74,14 @@ spec:
             name: leninkart-frontend
             port:
               number: 80
-"""
+""")
 
 def main():
-    if not INGRESS_FILE.exists():
-        raise FileNotFoundError(f"Ingress template not found: {INGRESS_FILE}")
-
-    INGRESS_FILE.write_text(NEW_INGRESS)
-    print("✅ Ingress updated with rewrite rules")
-    print("➡ Commit & push to dev branch")
-    print("➡ ArgoCD will auto-sync")
+    fix_frontend_service()
+    fix_frontend_deployment()
+    fix_order_service_selector()
+    fix_ingress()
+    print("✅ LeninKart wiring normalized safely")
 
 if __name__ == "__main__":
     main()

@@ -20,17 +20,18 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
           ports:
-            - containerPort: {{ .Values.container.port }}
+            - name: http
+              containerPort: {{ .Values.container.port }}
 
           readinessProbe:
             httpGet:
-              path: {{ .Values.readinessProbe.path }}
+              path: /
               port: {{ .Values.container.port }}
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
 
           livenessProbe:
             httpGet:
-              path: {{ .Values.livenessProbe.path }}
+              path: /
               port: {{ .Values.container.port }}
             initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
 
