@@ -49,5 +49,9 @@ env:
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
   SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "60000"
 
-  # ---------- KAFKA (✅ FIXED) ----------
+  # ---------- KAFKA ----------
   SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-0.kafka.dev.svc.cluster.local:9092
+
+  # ---------- ACTUATOR (CRITICAL FIX) ----------
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
