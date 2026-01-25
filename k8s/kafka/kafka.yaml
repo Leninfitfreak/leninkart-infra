@@ -20,36 +20,37 @@ spec:
           ports:
             - containerPort: 9092
             - containerPort: 9093
+
           env:
-            - name: KAFKA_PROCESS_ROLES
-              value: "controller,broker"
+        - name: KAFKA_PROCESS_ROLES
+          value: "broker,controller"
 
-            - name: KAFKA_NODE_ID
-              value: "0"
+        - name: KAFKA_NODE_ID
+          value: "1"
 
-            - name: KAFKA_CLUSTER_ID
-              value: "cICOmzzYSGur9Qz-qJTksA"
+        - name: CLUSTER_ID
+          value: "cICOmzzYSGur9Qz-qJTksA"
 
-            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
-              value: "0@kafka-0.kafka.dev.svc.cluster.local:9093"
+        - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+          value: "1@kafka-0.kafka.dev.svc.cluster.local:9093"
 
-            - name: KAFKA_LISTENERS
-              value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
+        - name: KAFKA_LISTENERS
+          value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
 
-            - name: KAFKA_ADVERTISED_LISTENERS
-              value: "PLAINTEXT://kafka.dev.svc.cluster.local:9092"
+        - name: KAFKA_ADVERTISED_LISTENERS
+          value: "PLAINTEXT://kafka.dev.svc.cluster.local:9092"
 
-            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
-              value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+        - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+          value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
 
-            - name: KAFKA_CONTROLLER_LISTENER_NAMES
-              value: "CONTROLLER"
+        - name: KAFKA_CONTROLLER_LISTENER_NAMES
+          value: "CONTROLLER"
 
-            - name: KAFKA_INTER_BROKER_LISTENER_NAME
-              value: "PLAINTEXT"
+        - name: KAFKA_INTER_BROKER_LISTENER_NAME
+          value: "PLAINTEXT"
 
-            - name: KAFKA_LOG_DIRS
-              value: "/var/lib/kafka/data"
+        - name: KAFKA_LOG_DIRS
+          value: "/var/lib/kafka/data"
 
           volumeMounts:
             - name: kafka-data
