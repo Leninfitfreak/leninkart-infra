@@ -1,25 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "frontend.fullname" . }}
+  name: frontend
   labels:
-    app.kubernetes.io/name: {{ include "frontend.name" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
-
+    app: frontend
 spec:
   replicas: {{ .Values.replicaCount }}
-
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "frontend.name" . }}
-      app.kubernetes.io/instance: {{ .Release.Name }}
-
+      app: frontend
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: {{ include "frontend.name" . }}
-        app.kubernetes.io/instance: {{ .Release.Name }}
-
+        app: frontend
     spec:
       containers:
         - name: frontend
@@ -27,25 +20,19 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
           ports:
-            - name: http
-              containerPort: {{ .Values.container.port }}
-              protocol: TCP
+            - containerPort: {{ .Values.container.port }}
 
           readinessProbe:
             httpGet:
-              path: {{ .Values.readinessProbe.httpGet.path }}
-              port: http
+              path: {{ .Values.readinessProbe.path }}
+              port: {{ .Values.container.port }}
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
-            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
-            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
 
           livenessProbe:
             httpGet:
-              path: {{ .Values.livenessProbe.httpGet.path }}
-              port: http
+              path: {{ .Values.livenessProbe.path }}
+              port: {{ .Values.container.port }}
             initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
-            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
-            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
 
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+{{ toYaml .Values.resources | indent 12 }}
