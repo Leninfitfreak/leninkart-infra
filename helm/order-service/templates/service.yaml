@@ -8,5 +8,6 @@ spec:
     app.kubernetes.io/name: order-service
     app.kubernetes.io/instance: dev-order-service
   ports:
-    - port: {{ .Values.service.port }}
-      targetPort: http
+    - name: http              # ✅ REQUIRED
+      port: {{ .Values.service.port }}
+      targetPort: http        # maps to containerPort name
