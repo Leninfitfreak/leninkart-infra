@@ -1,17 +1,13 @@
 replicaCount: 1
-
 image:
   repository: leninfitfreak/frontend
-  tag: '21110957001'
+  tag: '21112742373'
   pullPolicy: IfNotPresent
-
 service:
   type: ClusterIP
-  port: 80          # ✅ nginx service port
-
+  port: 80 # ✅ nginx service port
 container:
-  port: 80          # ✅ nginx container port
-
+  port: 80 # ✅ nginx container port
 resources:
   requests:
     cpu: 100m
@@ -19,19 +15,17 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
-
 readinessProbe:
   httpGet:
     path: /
-    port: 80        # ✅ probe nginx, not react
+    port: 80 # ✅ probe nginx, not react
   initialDelaySeconds: 10
   periodSeconds: 10
   failureThreshold: 5
-
 livenessProbe:
   httpGet:
     path: /
-    port: 80        # ✅ probe nginx
+    port: 80 # ✅ probe nginx
   initialDelaySeconds: 20
   periodSeconds: 15
   failureThreshold: 5
