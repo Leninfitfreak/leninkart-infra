@@ -24,11 +24,16 @@ spec:
               containerPort: {{ .Values.service.port | default 8080 }}
               protocol: TCP
 
-          # -------------------- STARTUP PROBE --------------------
+          # -------------------- STARTUP PROBE (FIXED) --------------------
           startupProbe:
+          {{- if .Values.startupProbe.httpGet }}
             httpGet:
               path: {{ .Values.startupProbe.httpGet.path }}
               port: http
+          {{- else if .Values.startupProbe.tcpSocket }}
+            tcpSocket:
+              port: http
+          {{- end }}
             initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.startupProbe.periodSeconds }}
             failureThreshold: {{ .Values.startupProbe.failureThreshold }}
