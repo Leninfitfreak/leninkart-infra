@@ -11,7 +11,7 @@ spec:
   rules:
   - http:
       paths:
-      # -------- PRODUCT SERVICE --------
+      # PRODUCT SERVICE
       - path: /api/products(/|$)(.*)
         pathType: ImplementationSpecific
         backend:
@@ -20,7 +20,7 @@ spec:
             port:
               number: 8081
 
-      # -------- ORDER SERVICE --------
+      # ORDER SERVICE
       - path: /api/orders(/|$)(.*)
         pathType: ImplementationSpecific
         backend:
@@ -29,7 +29,7 @@ spec:
             port:
               number: 8080
 
-      # -------- FRONTEND --------
+      # FRONTEND
       - path: /
         pathType: Prefix
         backend:

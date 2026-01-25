@@ -2,8 +2,7 @@ from pathlib import Path
 
 INGRESS_FILE = Path("helm/ingress/templates/ingress.yaml")
 
-NEW_INGRESS = """\
-apiVersion: networking.k8s.io/v1
+NEW_INGRESS = """apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: leninkart-ingress
@@ -16,7 +15,7 @@ spec:
   rules:
   - http:
       paths:
-      # -------- PRODUCT SERVICE --------
+      # PRODUCT SERVICE
       - path: /api/products(/|$)(.*)
         pathType: ImplementationSpecific
         backend:
@@ -25,7 +24,7 @@ spec:
             port:
               number: 8081
 
-      # -------- ORDER SERVICE --------
+      # ORDER SERVICE
       - path: /api/orders(/|$)(.*)
         pathType: ImplementationSpecific
         backend:
@@ -34,7 +33,7 @@ spec:
             port:
               number: 8080
 
-      # -------- FRONTEND --------
+      # FRONTEND
       - path: /
         pathType: Prefix
         backend:
@@ -48,19 +47,10 @@ def main():
     if not INGRESS_FILE.exists():
         raise FileNotFoundError(f"Ingress template not found: {INGRESS_FILE}")
 
-    backup = INGRESS_FILE.with_suffix(".yaml.bak")
-    if not backup.exists():
-        backup.write_text(INGRESS_FILE.read_text())
-        print(f"🧾 Backup created: {backup}")
-
     INGRESS_FILE.write_text(NEW_INGRESS)
-    print("✅ Ingress rewrite FIX applied safely")
-
-    print("\n➡️ Next steps:")
-    print("1. git commit -am 'fix: ingress rewrite for api paths'")
-    print("2. git push origin dev")
-    print("3. ArgoCD auto-sync")
-    print("4. Test via minikube IP")
+    print("✅ Ingress updated with rewrite rules")
+    print("➡ Commit & push to dev branch")
+    print("➡ ArgoCD will auto-sync")
 
 if __name__ == "__main__":
     main()
