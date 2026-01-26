@@ -1,7 +1,7 @@
 replicaCount: 1
 image:
   repository: leninfitfreak/product-service
-  tag: "05bd517e58e792df249acbabd015a7cd4e47a3f3"
+  tag: "29bf045fdcd394f9b016356f0142be26cc3fa21d"
   pullPolicy: IfNotPresent
 service:
   type: ClusterIP
