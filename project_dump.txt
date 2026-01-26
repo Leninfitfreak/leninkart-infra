@@ -168,197 +168,205 @@ if __name__ == "__main__":
 
 ### FILE: fix.py
 ```
-#!/usr/bin/env python3
-"""
-LeninKart Kubernetes Debug Script
-Checks the actual state of your cluster and identifies issues
-"""
-
 import subprocess
-import json
 import sys
+import shutil
+from datetime import datetime
+from pathlib import Path
 
-class K8sDebugger:
-    def __init__(self, namespace="dev"):
-        self.namespace = namespace
-        self.issues = []
-        
-    def run_cmd(self, cmd):
-        """Run kubectl command and return output"""
-        try:
-            result = subprocess.run(
-                cmd, 
-                shell=True, 
-                capture_output=True, 
-                text=True, 
-                timeout=10
-            )
-            return result.stdout.strip(), result.returncode
-        except Exception as e:
-            return f"Error: {str(e)}", 1
-    
-    def check_pods(self):
-        """Check if all pods are running"""
-        print("\n" + "="*60)
-        print("🔍 CHECKING PODS")
-        print("="*60)
-        
-        output, code = self.run_cmd(f"kubectl get pods -n {self.namespace}")
-        print(output)
-        
-        if code != 0:
-            self.issues.append("❌ Failed to get pods - is kubectl configured?")
-            return False
-        
-        # Check for non-running pods
-        lines = output.split('\n')[1:]  # Skip header
-        for line in lines:
-            if line and 'Running' not in line:
-                self.issues.append(f"❌ Pod not running: {line.split()[0]}")
-        
-        return True
-    
-    def check_services(self):
-        """Check if services exist and have endpoints"""
-        print("\n" + "="*60)
-        print("🔍 CHECKING SERVICES")
-        print("="*60)
-        
-        services = [
-            "leninkart-product-service",
-            "leninkart-order-service", 
-            "leninkart-frontend"
-        ]
-        
-        for svc in services:
-            output, code = self.run_cmd(f"kubectl get svc {svc} -n {self.namespace} -o wide")
-            
-            if code != 0:
-                print(f"❌ {svc} NOT FOUND")
-                self.issues.append(f"❌ Service {svc} does not exist")
-            else:
-                print(f"✓ {svc}")
-                print(f"  {output.split(chr(10))[1]}")
-                
-                # Check endpoints
-                ep_out, ep_code = self.run_cmd(f"kubectl get endpoints {svc} -n {self.namespace}")
-                if 'none' in ep_out.lower():
-                    self.issues.append(f"⚠️  {svc} has no endpoints (no pods selected)")
-        
-        return True
-    
-    def check_ingress(self):
-        """Check ingress configuration"""
-        print("\n" + "="*60)
-        print("🔍 CHECKING INGRESS")
-        print("="*60)
-        
-        output, code = self.run_cmd(f"kubectl get ingress -n {self.namespace}")
-        print(output)
-        
-        if code != 0 or 'leninkart-ingress' not in output:
-            self.issues.append("❌ Ingress not found")
-            return False
-        
-        # Get detailed ingress info
-        detail, _ = self.run_cmd(f"kubectl describe ingress leninkart-ingress -n {self.namespace}")
-        print("\nIngress Details:")
-        
-        # Extract paths
-        for line in detail.split('\n'):
-            if 'Path:' in line or 'Backend:' in line:
-                print(f"  {line.strip()}")
-        
-        return True
-    
-    def test_service_directly(self):
-        """Test if we can reach services directly"""
-        print("\n" + "="*60)
-        print("🔍 TESTING DIRECT SERVICE ACCESS")
-        print("="*60)
-        
-        print("\nTesting product-service...")
-        print("Run this command in another terminal:")
-        print(f"  kubectl port-forward -n {self.namespace} svc/leninkart-product-service 8081:8081")
-        print("  Then visit: http://localhost:8081/api/products")
-        
-        return True
-    
-    def check_pod_logs(self):
-        """Get recent logs from backend services"""
-        print("\n" + "="*60)
-        print("🔍 CHECKING POD LOGS (last 10 lines)")
-        print("="*60)
-        
-        services = [
-            ("product-service", "app=product-service"),
-            ("order-service", "app.kubernetes.io/name=order-service")
-        ]
-        
-        for name, label in services:
-            print(f"\n--- {name} ---")
-            output, code = self.run_cmd(
-                f"kubectl logs -n {self.namespace} -l {label} --tail=10 2>&1"
-            )
-            if code == 0 and output:
-                print(output)
-            else:
-                print(f"No logs or pod not found")
-    
-    def suggest_fixes(self):
-        """Provide actionable fixes based on issues found"""
-        print("\n" + "="*60)
-        print("💡 DIAGNOSIS & FIXES")
-        print("="*60)
-        
-        if not self.issues:
-            print("\n✅ No obvious issues found!")
-            print("\nBut you're still getting 404s. This means:")
-            print("1. Services might not be registered correctly")
-            print("2. Ingress routing is misconfigured")
-            print("3. Backend services aren't responding on expected paths")
-            print("\nQuick test:")
-            print(f"  kubectl port-forward -n {self.namespace} svc/leninkart-product-service 8081:8081")
-            print("  curl http://localhost:8081/api/products")
-            print("\nIf that works, the issue is in the ingress routing.")
-        else:
-            print("\n🔴 Issues Found:")
-            for issue in self.issues:
-                print(f"  {issue}")
-        
-        print("\n" + "="*60)
-        print("RECOMMENDED ACTIONS:")
-        print("="*60)
-        print("1. Run: kubectl port-forward -n dev svc/leninkart-product-service 8081:8081")
-        print("   Then test: curl http://localhost:8081/api/products")
-        print()
-        print("2. If #1 fails: Check pod logs for errors")
-        print("   kubectl logs -n dev -l app=product-service --tail=50")
-        print()
-        print("3. If #1 works: Issue is in ingress routing")
-        print("   Run the fix_infra.py script to fix ingress")
-        print()
-        print("4. Ensure minikube tunnel is running:")
-        print("   minikube tunnel")
-        print("="*60)
-    
-    def run_full_check(self):
-        """Run all checks"""
-        print("\n🚀 LeninKart Kubernetes Debugger")
-        print(f"   Namespace: {self.namespace}")
-        
-        self.check_pods()
-        self.check_services()
-        self.check_ingress()
-        self.test_service_directly()
-        self.check_pod_logs()
-        self.suggest_fixes()
+NAMESPACE = "dev"
+TIMESTAMP = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+REPORT_FILE = Path(f"leninkart_wiring_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
+
+ISSUES = []
+KUBECTL = None
+
+
+# ------------------ OUTPUT HELPERS ------------------
+
+def log(msg):
+    print(msg)
+    REPORT.append(msg)
+
+def header(title):
+    line = "=" * 70
+    log(f"\n{line}")
+    log(f"{title.center(70)}")
+    log(line)
+
+def section(title):
+    log("\n" + "-" * 70)
+    log(f"▶ {title}")
+    log("-" * 70)
+
+def issue(severity, title, desc, fix):
+    ISSUES.append({
+        "severity": severity,
+        "title": title,
+        "desc": desc,
+        "fix": fix
+    })
+
+# ------------------ COMMAND RUNNER ------------------
+
+def run(cmd):
+    return subprocess.run(
+        cmd,
+        shell=True,
+        text=True,
+        capture_output=True
+    )
+
+# ------------------ KUBECTL DETECTION ------------------
+
+def detect_kubectl():
+    global KUBECTL
+    section("1. Detecting kubectl")
+
+    candidates = [
+        "kubectl",
+        r"C:\ProgramData\chocolatey\bin\kubectl.exe",
+        r"C:\Program Files\Kubernetes\kubectl.exe",
+    ]
+
+    for c in candidates:
+        r = run(f"\"{c}\" version --client --short")
+        if r.returncode == 0:
+            KUBECTL = f"\"{c}\""
+            log(f"[OK] kubectl detected: {c}")
+            return True
+
+    # minikube fallback
+    mini_candidates = [
+        "minikube",
+        r"C:\ProgramData\chocolatey\bin\minikube.exe"
+    ]
+
+    for m in mini_candidates:
+        r = run(f"\"{m}\" status")
+        if r.returncode == 0:
+            KUBECTL = f"\"{m}\" kubectl --"
+            log(f"[OK] kubectl via minikube: {m}")
+            return True
+
+    log("[CRITICAL] kubectl not available")
+    issue(
+        "CRITICAL",
+        "kubectl missing",
+        "kubectl.exe not found by Python runtime",
+        "Restart VS Code or add Chocolatey bin to PATH"
+    )
+    return False
+
+# ------------------ CLUSTER CHECKS ------------------
+
+def check_cluster():
+    section("2. Cluster & Context")
+    r = run(f"{KUBECTL} config current-context")
+    if r.returncode != 0:
+        issue("CRITICAL", "No cluster context", "kubectl context not set", "Run minikube start")
+        return False
+    log(f"[OK] Current context: {r.stdout.strip()}")
+    return True
+
+def check_namespace():
+    section("3. Namespace")
+    r = run(f"{KUBECTL} get ns {NAMESPACE}")
+    if r.returncode != 0:
+        issue("CRITICAL", "Namespace missing", f"{NAMESPACE} not found", f"kubectl create ns {NAMESPACE}")
+        return False
+    log(f"[OK] Namespace '{NAMESPACE}' exists")
+    return True
+
+# ------------------ PODS ------------------
+
+def check_pods():
+    section("4. Pods")
+    r = run(f"{KUBECTL} get pods -n {NAMESPACE} -o wide")
+    if r.returncode != 0:
+        issue("CRITICAL", "Pods unavailable", "Cannot list pods", "Check cluster health")
+        return
+    log(r.stdout)
+
+# ------------------ SERVICES & ENDPOINTS ------------------
+
+def check_services():
+    section("5. Services")
+    r = run(f"{KUBECTL} get svc -n {NAMESPACE}")
+    if r.returncode != 0:
+        issue("CRITICAL", "Services unavailable", "Cannot list services", "Check Helm charts")
+        return
+    log(r.stdout)
+
+def check_endpoints():
+    section("6. Endpoints (CRITICAL WIRING CHECK)")
+    r = run(f"{KUBECTL} get endpoints -n {NAMESPACE}")
+    log(r.stdout)
+
+    if "<none>" in r.stdout:
+        issue(
+            "CRITICAL",
+            "Service without endpoints",
+            "One or more services have no backing pods",
+            "Fix selector labels in Service vs Deployment"
+        )
+
+# ------------------ INGRESS ------------------
+
+def check_ingress():
+    section("7. Ingress")
+    r = run(f"{KUBECTL} get ingress -n {NAMESPACE}")
+    if r.returncode != 0:
+        issue("HIGH", "Ingress missing", "No ingress found", "Apply ingress manifest")
+        return
+    log(r.stdout)
+
+    r = run(f"{KUBECTL} describe ingress -n {NAMESPACE}")
+    log(r.stdout)
+
+# ------------------ REPORT ------------------
+
+def show_report():
+    header("DIAGNOSTIC REPORT")
+
+    if not ISSUES:
+        log("✅ No critical issues found. Wiring looks healthy.")
+        return
+
+    for i, it in enumerate(ISSUES, 1):
+        log(f"[{it['severity']}] Issue #{i}: {it['title']}")
+        log(f"Description: {it['desc']}")
+        log(f"Fix: {it['fix']}\n")
+
+# ------------------ MAIN ------------------
+
+REPORT = []
+
+def main():
+    header("LENINKART SERVICE WIRING DEBUGGER")
+    log(f"[INFO] Timestamp: {TIMESTAMP}")
+    log(f"[INFO] Namespace: {NAMESPACE}")
+
+    if not detect_kubectl():
+        show_report()
+        return
+
+    if not check_cluster():
+        show_report()
+        return
+
+    check_namespace()
+    check_pods()
+    check_services()
+    check_endpoints()
+    check_ingress()
+    show_report()
+
+    REPORT_FILE.write_text("\n".join(REPORT), encoding="utf-8")
+    log(f"\n📄 Report saved to: {REPORT_FILE}")
 
 if __name__ == "__main__":
-    namespace = sys.argv[1] if len(sys.argv) > 1 else "dev"
-    
-    debugger = K8sDebugger(namespace)
-    debugger.run_full_check()
+    main()
 ```
 
 ### FILE: helm_order-service_values-dev.yaml
@@ -796,7 +804,7 @@ version: 0.1.0
 replicaCount: 1
 image:
   repository: leninfitfreak/frontend
-  tag: '21330320579'
+  tag: '21337825304'
   pullPolicy: IfNotPresent
 service:
   type: ClusterIP
@@ -914,14 +922,23 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: leninkart-frontend
+  name: {{ include "frontend.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "frontend.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
 spec:
   type: {{ .Values.service.type }}
+
   selector:
-    app: frontend
+    app.kubernetes.io/name: {{ include "frontend.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
   ports:
-    - port: {{ .Values.service.port }}
+    - name: http
+      port: {{ .Values.service.port }}
       targetPort: http
+      protocol: TCP
 ```
 
 ### DIRECTORY: helm\ingress/
@@ -954,7 +971,7 @@ spec:
   rules:
   - http:
       paths:
-      # ---------- PRODUCT SERVICE ----------
+      # API PATHS MUST COME FIRST!
       - path: /api/products
         pathType: Prefix
         backend:
@@ -962,8 +979,7 @@ spec:
             name: leninkart-product-service
             port:
               number: 8081
-
-      # ---------- ORDER SERVICE ----------
+              
       - path: /api/orders
         pathType: Prefix
         backend:
@@ -971,8 +987,8 @@ spec:
             name: leninkart-order-service
             port:
               number: 8080
-
-      # ---------- FRONTEND (NO REWRITE) ----------
+      
+      # FRONTEND COMES LAST (catches everything else)
       - path: /
         pathType: Prefix
         backend:
@@ -998,7 +1014,7 @@ replicaCount: 1
 
 image:
   repository: leninfitfreak/order-service
-  tag: "21331983687"
+  tag: "21348365866"
   pullPolicy: IfNotPresent
 
 service:
@@ -1231,6 +1247,7 @@ env:
   SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
   SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: 'true'
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-0.kafka.dev.svc.cluster.local:9092
 ```
 
 ### DIRECTORY: helm\product-service\templates/

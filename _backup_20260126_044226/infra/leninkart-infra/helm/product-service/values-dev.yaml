@@ -1,14 +1,11 @@
 replicaCount: 1
-
 image:
   repository: leninfitfreak/product-service
   tag: '21089937961'
   pullPolicy: IfNotPresent
-
 service:
   type: ClusterIP
   port: 8081
-
 resources:
   requests:
     cpu: 100m
@@ -16,7 +13,6 @@ resources:
   limits:
     cpu: 300m
     memory: 256Mi
-
 startupProbe:
   httpGet:
     path: /actuator/health
@@ -24,7 +20,6 @@ startupProbe:
   initialDelaySeconds: 60
   periodSeconds: 10
   failureThreshold: 30
-
 readinessProbe:
   httpGet:
     path: /actuator/health
@@ -32,7 +27,6 @@ readinessProbe:
   initialDelaySeconds: 30
   periodSeconds: 10
   failureThreshold: 6
-
 livenessProbe:
   httpGet:
     path: /actuator/health
@@ -40,7 +34,6 @@ livenessProbe:
   initialDelaySeconds: 60
   periodSeconds: 20
   failureThreshold: 10
-
 env:
   SERVER_PORT: "8081"
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart

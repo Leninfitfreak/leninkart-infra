@@ -9,9 +9,6 @@ service:
   type: ClusterIP
   port: 80
 
-container:
-  port: 80
-
 resources:
   requests:
     cpu: 100m
@@ -22,16 +19,16 @@ resources:
 
 readinessProbe:
   httpGet:
-    path: /
+    path: /health
     port: 80
-  initialDelaySeconds: 10
+  initialDelaySeconds: 30
   periodSeconds: 10
   failureThreshold: 3
 
 livenessProbe:
   httpGet:
-    path: /
+    path: /health
     port: 80
-  initialDelaySeconds: 20
-  periodSeconds: 15
-  failureThreshold: 5
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  failureThreshold: 6
