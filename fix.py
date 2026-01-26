@@ -1,128 +1,162 @@
 #!/usr/bin/env python3
 """
-Fix LeninKart Infrastructure Repository
-Removes rewrite-target annotation that's breaking the ingress routing
-Author: Lenin Raj
+Quick fix for LeninKart Ingress - removes annotations and verifies
 """
 
-import re
+import subprocess
 from pathlib import Path
-from datetime import datetime
-import shutil
 
-class InfraFixer:
-    def __init__(self, repo_path="."):
-        self.repo_path = Path(repo_path)
-        self.backup_dir = self.repo_path / f"_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        self.fixes = []
-        
-    def log(self, msg, level="INFO"):
-        colors = {"INFO": "\033[94m", "SUCCESS": "\033[92m", "ERROR": "\033[91m", "RESET": "\033[0m"}
-        print(f"{colors.get(level, '')}{level}: {msg}{colors['RESET']}")
+def run(cmd):
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    return result.stdout, result.returncode
+
+def check_current_ingress():
+    """Check what the current ingress looks like"""
+    print("\n" + "="*60)
+    print("📋 CURRENT INGRESS CONFIGURATION")
+    print("="*60)
     
-    def backup_file(self, file_path):
-        if not self.backup_dir.exists():
-            self.backup_dir.mkdir(parents=True)
-        
-        rel_path = file_path.relative_to(self.repo_path)
-        backup_path = self.backup_dir / rel_path
-        backup_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(file_path, backup_path)
+    output, code = run("kubectl get ingress leninkart-ingress -n dev -o yaml")
     
-    def fix_ingress(self):
-        """Remove problematic regex annotation from ingress"""
-        ingress_file = self.repo_path / "helm/ingress/templates/ingress.yaml"
+    if code == 0:
+        # Show the important parts
+        for line in output.split('\n'):
+            if any(x in line for x in ['annotations:', 'path:', 'pathType:', 'backend:', 'serviceName:', 'servicePort:', 'name: leninkart']):
+                print(line)
         
-        if not ingress_file.exists():
-            self.log("Ingress file not found!", "ERROR")
-            return False
-        
-        self.backup_file(ingress_file)
-        content = ingress_file.read_text(encoding='utf-8')
-        
-        # Remove the use-regex annotation (keep it simple, no rewrite)
-        new_content = re.sub(
-            r'\s*annotations:.*\n\s*nginx\.ingress\.kubernetes\.io/use-regex:.*\n',
-            '\n',
-            content
-        )
-        
-        # Ensure paths are simple Prefix type
-        new_content = re.sub(
-            r'pathType: ImplementationSpecific',
-            'pathType: Prefix',
-            new_content
-        )
-        
-        ingress_file.write_text(new_content, encoding='utf-8')
-        self.fixes.append("✓ Fixed ingress - removed regex annotation")
-        self.log("Fixed ingress.yaml", "SUCCESS")
-        return True
-    
-    def verify_service_names(self):
-        """Ensure service names match in product-service"""
-        svc_file = self.repo_path / "helm/product-service/templates/service.yaml"
-        
-        if not svc_file.exists():
+        # Check for problematic annotation
+        if 'use-regex' in output or 'rewrite-target' in output:
+            print("\n⚠️  Found problematic annotations!")
             return True
-        
-        self.backup_file(svc_file)
-        content = svc_file.read_text(encoding='utf-8')
-        
-        # Ensure port has a name
-        if 'name: http' not in content:
-            content = re.sub(
-                r'(\s+ports:\s*\n\s+-)(\s+port:)',
-                r'\1 name: http\n\2',
-                content
-            )
-            svc_file.write_text(content, encoding='utf-8')
-            self.fixes.append("✓ Added port name to product-service")
-            self.log("Fixed product-service port name", "SUCCESS")
-        
-        return True
-    
-    def run(self):
-        self.log("=" * 60, "INFO")
-        self.log("LeninKart Infrastructure Fixer", "INFO")
-        self.log("=" * 60, "INFO")
-        
-        # Verify we're in the right repo
-        if not (self.repo_path / "helm").exists():
-            self.log("ERROR: Not in leninkart-infra repo!", "ERROR")
-            self.log("Run this from the infra repository root", "ERROR")
+        else:
+            print("\n✅ No problematic annotations found")
             return False
+    return False
+
+def apply_fixed_ingress():
+    """Apply the correct ingress configuration directly"""
+    print("\n" + "="*60)
+    print("🔧 APPLYING FIXED INGRESS")
+    print("="*60)
+    
+    # The correct ingress YAML
+    ingress_yaml = """apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-ingress
+  namespace: dev
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /api/products
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-product-service
+            port:
+              number: 8081
+      - path: /api/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 80
+"""
+    
+    # Write to temp file
+    temp_file = Path("temp_ingress.yaml")
+    temp_file.write_text(ingress_yaml)
+    
+    print("Applying configuration...")
+    output, code = run("kubectl apply -f temp_ingress.yaml")
+    
+    if code == 0:
+        print("✅ Ingress updated successfully!")
+        print(output)
+    else:
+        print("❌ Failed to update ingress")
+        print(output)
+    
+    # Clean up
+    temp_file.unlink()
+    
+    return code == 0
+
+def verify_ingress():
+    """Verify the ingress is now correct"""
+    print("\n" + "="*60)
+    print("✅ VERIFYING INGRESS")
+    print("="*60)
+    
+    output, code = run("kubectl describe ingress leninkart-ingress -n dev")
+    
+    if code == 0:
+        print("\nIngress Rules:")
+        in_rules = False
+        for line in output.split('\n'):
+            if 'Rules:' in line:
+                in_rules = True
+            if in_rules:
+                if line.strip() and any(x in line for x in ['Path', 'Backend', '/', 'api']):
+                    print(f"  {line.strip()}")
+                if 'Annotations:' in line and in_rules:
+                    break
+
+def test_connection():
+    """Provide test commands"""
+    print("\n" + "="*60)
+    print("🧪 TEST THE FIX")
+    print("="*60)
+    print("\n1. Wait 10 seconds for ingress controller to update")
+    print("\n2. Refresh your browser at http://localhost:8081")
+    print("\n3. If still not working, port-forward directly:")
+    print("   kubectl port-forward -n dev svc/leninkart-product-service 8082:8081")
+    print("   Then visit: http://localhost:8082/api/products")
+    print("\n4. Check ingress address:")
+    print("   kubectl get ingress -n dev")
+    print("\n5. Ensure minikube tunnel is running in another terminal:")
+    print("   minikube tunnel")
+
+def main():
+    print("\n🚀 LeninKart Ingress Quick Fix")
+    
+    # Check current state
+    has_issue = check_current_ingress()
+    
+    if has_issue or True:  # Always apply the fix
+        # Apply the fix
+        success = apply_fixed_ingress()
         
-        self.log("Starting fixes...", "INFO")
-        self.fix_ingress()
-        self.verify_service_names()
-        
-        self.log("", "INFO")
-        self.log("=" * 60, "SUCCESS")
-        self.log(f"Applied {len(self.fixes)} fixes:", "SUCCESS")
-        for fix in self.fixes:
-            self.log(f"  {fix}", "SUCCESS")
-        
-        self.log("", "INFO")
-        self.log(f"Backup: {self.backup_dir.name}", "INFO")
-        self.log("", "INFO")
-        self.log("NEXT STEPS:", "INFO")
-        self.log("1. git add .", "INFO")
-        self.log("2. git commit -m 'fix: remove ingress regex annotation'", "INFO")
-        self.log("3. git push origin dev", "INFO")
-        self.log("4. Wait for ArgoCD to sync", "INFO")
-        self.log("=" * 60, "INFO")
-        
-        return True
+        if success:
+            # Verify
+            verify_ingress()
+            
+            # Provide test instructions
+            test_connection()
+            
+            print("\n" + "="*60)
+            print("✅ INGRESS FIX COMPLETE!")
+            print("="*60)
+            print("\nThe ingress has been updated.")
+            print("Wait 10 seconds and refresh your browser.")
+            print("\nIf the issue persists, the problem might be:")
+            print("1. Minikube tunnel not running")
+            print("2. ArgoCD overwriting the ingress (disable auto-sync temporarily)")
+            print("="*60)
+        else:
+            print("\n❌ Fix failed. Try manually:")
+            print("kubectl edit ingress leninkart-ingress -n dev")
+            print("Remove the 'annotations' section")
 
 if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) > 1:
-        repo_path = sys.argv[1]
-    else:
-        repo_path = "."
-    
-    fixer = InfraFixer(repo_path)
-    success = fixer.run()
-    sys.exit(0 if success else 1)
+    main()
