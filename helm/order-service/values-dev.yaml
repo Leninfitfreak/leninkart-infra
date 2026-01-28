@@ -1,21 +1,17 @@
 replicaCount: 1
-
 image:
   repository: leninfitfreak/order-service
-  tag: "21348365866"
+  tag: "21405007976"
   pullPolicy: IfNotPresent
-
 service:
   type: ClusterIP
   port: 8080
-
 startupProbe:
   tcpSocket:
     port: http
   initialDelaySeconds: 10
   periodSeconds: 5
   failureThreshold: 60
-
 readinessProbe:
   httpGet:
     path: /actuator/health/readiness
@@ -23,7 +19,6 @@ readinessProbe:
   initialDelaySeconds: 30
   periodSeconds: 10
   failureThreshold: 6
-
 livenessProbe:
   httpGet:
     path: /actuator/health/liveness
@@ -31,7 +26,6 @@ livenessProbe:
   initialDelaySeconds: 60
   periodSeconds: 20
   failureThreshold: 10
-
 resources:
   requests:
     cpu: 100m
@@ -39,7 +33,6 @@ resources:
   limits:
     cpu: 300m
     memory: 256Mi
-
 env:
   # ---------- DATABASE ----------
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
@@ -48,10 +41,13 @@ env:
   SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
   SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "60000"
-
   # ---------- KAFKA ----------
   SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-0.kafka.dev.svc.cluster.local:9092
+<<<<<<< HEAD
 
   # ---------- ACTUATOR (CRITICAL FOR K8s PROBES) ----------
+=======
+  # ---------- ACTUATOR (CRITICAL FIX) ----------
+>>>>>>> 9fdd1b053b4c1861e54ecf8cd5601a1dd796adce
   MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
   MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"

@@ -1,278 +1,25 @@
 #!/usr/bin/env python3
 """
-LeninKart Infrastructure Auto-Fix Script
-=========================================
-Fixes the following issues:
-1. Frontend service selector mismatch
-2. Missing frontend _helpers.tpl
-3. Missing service.type in order-service values
-4. Missing container.port in frontend values.yaml
+LeninKart Kubernetes Diagnostic Script
+======================================
+This script helps diagnose why /api/products returns 404
 
-Author: Claude AI Assistant
-Usage: python leninkart_infra_fix.py [path_to_infra_repo]
+Run this on a machine with kubectl access to your cluster.
+
+Usage: python leninkart_diagnose.py
 """
 
-import os
+import subprocess
 import sys
-import shutil
-from datetime import datetime
-from pathlib import Path
+import re
+
+NAMESPACE = "dev"
 
 # ============================================================
-# CONFIGURATION
-# ============================================================
-
-BACKUP_PREFIX = "_backup_"
-TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-# ============================================================
-# FILE CONTENTS - FIXED VERSIONS
-# ============================================================
-
-FRONTEND_SERVICE_YAML = '''apiVersion: v1
-kind: Service
-metadata:
-  name: leninkart-frontend
-  labels:
-    app: frontend
-spec:
-  type: {{ .Values.service.type | default "ClusterIP" }}
-  selector:
-    app: frontend
-  ports:
-    - name: http
-      port: {{ .Values.service.port }}
-      targetPort: http
-      protocol: TCP
-'''
-
-FRONTEND_HELPERS_TPL = '''{{/* Chart name */}}
-{{- define "frontend.name" -}}
-{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
-{{- end }}
-
-{{/* Full name - always prefixed with leninkart- */}}
-{{- define "frontend.fullname" -}}
-{{- if .Values.fullnameOverride }}
-{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
-{{- else }}
-{{- printf "leninkart-%s" (include "frontend.name" .) | trunc 63 | trimSuffix "-" }}
-{{- end }}
-{{- end }}
-
-{{/* Standard labels */}}
-{{- define "frontend.labels" -}}
-helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
-app.kubernetes.io/name: {{ include "frontend.name" . }}
-app.kubernetes.io/instance: {{ .Release.Name }}
-app.kubernetes.io/managed-by: {{ .Release.Service }}
-app: frontend
-{{- end }}
-
-{{/* Selector labels - MUST match deployment pod labels */}}
-{{- define "frontend.selectorLabels" -}}
-app: frontend
-{{- end }}
-'''
-
-FRONTEND_VALUES_YAML = '''replicaCount: 1
-
-image:
-  repository: asia-south1-docker.pkg.dev/leninkart-478305/leninkart/frontend
-  pullPolicy: IfNotPresent
-  tag: latest
-
-service:
-  type: ClusterIP
-  port: 80
-
-container:
-  port: 80
-
-resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 300m
-    memory: 256Mi
-
-readinessProbe:
-  httpGet:
-    path: /
-    port: 80
-  initialDelaySeconds: 10
-  periodSeconds: 10
-  failureThreshold: 3
-
-livenessProbe:
-  httpGet:
-    path: /
-    port: 80
-  initialDelaySeconds: 20
-  periodSeconds: 15
-  failureThreshold: 5
-'''
-
-FRONTEND_VALUES_DEV_YAML = '''replicaCount: 1
-
-image:
-  repository: leninfitfreak/frontend
-  tag: '21337825304'
-  pullPolicy: IfNotPresent
-
-service:
-  type: ClusterIP
-  port: 80
-
-container:
-  port: 80
-
-resources:
-  requests:
-    cpu: 100m
-    memory: 256Mi
-  limits:
-    cpu: 500m
-    memory: 512Mi
-
-readinessProbe:
-  httpGet:
-    path: /
-    port: 80
-  initialDelaySeconds: 10
-  periodSeconds: 10
-  failureThreshold: 5
-
-livenessProbe:
-  httpGet:
-    path: /
-    port: 80
-  initialDelaySeconds: 20
-  periodSeconds: 15
-  failureThreshold: 5
-'''
-
-ORDER_SERVICE_VALUES_DEV_YAML = '''replicaCount: 1
-
-image:
-  repository: leninfitfreak/order-service
-  tag: "21348365866"
-  pullPolicy: IfNotPresent
-
-service:
-  type: ClusterIP
-  port: 8080
-
-startupProbe:
-  tcpSocket:
-    port: http
-  initialDelaySeconds: 10
-  periodSeconds: 5
-  failureThreshold: 60
-
-readinessProbe:
-  httpGet:
-    path: /actuator/health/readiness
-    port: 8080
-  initialDelaySeconds: 30
-  periodSeconds: 10
-  failureThreshold: 6
-
-livenessProbe:
-  httpGet:
-    path: /actuator/health/liveness
-    port: 8080
-  initialDelaySeconds: 60
-  periodSeconds: 20
-  failureThreshold: 10
-
-resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 300m
-    memory: 256Mi
-
-env:
-  # ---------- DATABASE ----------
-  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
-  SPRING_DATASOURCE_USERNAME: postgres
-  SPRING_DATASOURCE_PASSWORD: postgres
-  SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
-  SPRING_JPA_HIBERNATE_DDL_AUTO: update
-  SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "60000"
-
-  # ---------- KAFKA ----------
-  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-0.kafka.dev.svc.cluster.local:9092
-
-  # ---------- ACTUATOR (CRITICAL FOR K8s PROBES) ----------
-  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
-  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
-'''
-
-PRODUCT_SERVICE_VALUES_DEV_YAML = '''replicaCount: 1
-
-image:
-  repository: leninfitfreak/product-service
-  tag: '21089937961'
-  pullPolicy: IfNotPresent
-
-service:
-  type: ClusterIP
-  port: 8081
-
-resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 300m
-    memory: 256Mi
-
-startupProbe:
-  httpGet:
-    path: /actuator/health
-    port: 8081
-  initialDelaySeconds: 60
-  periodSeconds: 10
-  failureThreshold: 30
-
-readinessProbe:
-  httpGet:
-    path: /actuator/health
-    port: 8081
-  initialDelaySeconds: 30
-  periodSeconds: 10
-  failureThreshold: 6
-
-livenessProbe:
-  httpGet:
-    path: /actuator/health
-    port: 8081
-  initialDelaySeconds: 60
-  periodSeconds: 20
-  failureThreshold: 10
-
-env:
-  SERVER_PORT: "8081"
-  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
-  SPRING_DATASOURCE_USERNAME: postgres
-  SPRING_DATASOURCE_PASSWORD: postgres
-  SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-  SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
-  SPRING_JPA_HIBERNATE_DDL_AUTO: update
-  SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: 'true'
-  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-0.kafka.dev.svc.cluster.local:9092
-'''
-
-# ============================================================
-# HELPER FUNCTIONS
+# COLORS
 # ============================================================
 
 class Colors:
-    """ANSI color codes for terminal output"""
     RED = '\033[91m'
     GREEN = '\033[92m'
     YELLOW = '\033[93m'
@@ -283,8 +30,7 @@ class Colors:
     BOLD = '\033[1m'
     RESET = '\033[0m'
 
-def log(message: str, level: str = "INFO"):
-    """Print colored log message"""
+def log(msg, level="INFO"):
     colors = {
         "INFO": Colors.BLUE,
         "SUCCESS": Colors.GREEN,
@@ -293,360 +39,329 @@ def log(message: str, level: str = "INFO"):
         "HEADER": Colors.MAGENTA + Colors.BOLD,
     }
     color = colors.get(level, Colors.WHITE)
-    print(f"{color}[{level}]{Colors.RESET} {message}")
+    print(f"{color}[{level}]{Colors.RESET} {msg}")
 
-def header(title: str):
-    """Print section header"""
+def header(title):
     print()
     print(f"{Colors.CYAN}{'='*70}{Colors.RESET}")
     print(f"{Colors.CYAN}{Colors.BOLD}{title.center(70)}{Colors.RESET}")
     print(f"{Colors.CYAN}{'='*70}{Colors.RESET}")
 
-def section(title: str):
-    """Print subsection header"""
+def section(title):
     print()
     print(f"{Colors.YELLOW}{'-'*70}{Colors.RESET}")
     print(f"{Colors.YELLOW}▶ {title}{Colors.RESET}")
     print(f"{Colors.YELLOW}{'-'*70}{Colors.RESET}")
 
-def backup_file(file_path: Path, backup_dir: Path):
-    """Backup a file before modifying"""
-    if file_path.exists():
-        rel_path = file_path.relative_to(file_path.parents[len(file_path.parents)-2])
-        backup_path = backup_dir / rel_path
-        backup_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(file_path, backup_path)
-        return True
-    return False
-
-def write_file(file_path: Path, content: str):
-    """Write content to file, creating directories if needed"""
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_text(content, encoding='utf-8')
-
 # ============================================================
-# FIX FUNCTIONS
+# KUBECTL HELPERS
 # ============================================================
 
-class InfraFixer:
-    def __init__(self, repo_path: str = "."):
-        self.repo_path = Path(repo_path).resolve()
-        self.backup_dir = self.repo_path / f"{BACKUP_PREFIX}{TIMESTAMP}"
-        self.fixes_applied = []
-        self.errors = []
+def run_kubectl(cmd, capture=True):
+    """Run kubectl command and return output"""
+    full_cmd = f"kubectl {cmd}"
+    try:
+        result = subprocess.run(
+            full_cmd,
+            shell=True,
+            capture_output=capture,
+            text=True,
+            timeout=30
+        )
+        return result.returncode, result.stdout, result.stderr
+    except subprocess.TimeoutExpired:
+        return -1, "", "Command timed out"
+    except Exception as e:
+        return -1, "", str(e)
+
+def kubectl_get(resource, namespace=NAMESPACE, output="wide"):
+    """Get kubernetes resources"""
+    cmd = f"get {resource} -n {namespace}"
+    if output:
+        cmd += f" -o {output}"
+    return run_kubectl(cmd)
+
+# ============================================================
+# DIAGNOSTIC CHECKS
+# ============================================================
+
+def check_pods():
+    """Check if all pods are running"""
+    section("1. POD STATUS")
     
-    def validate_repo(self) -> bool:
-        """Check if this is a valid leninkart-infra repository"""
-        required_dirs = [
-            "helm/frontend",
-            "helm/order-service",
-            "helm/product-service",
-            "argocd",
-        ]
-        
-        for dir_path in required_dirs:
-            if not (self.repo_path / dir_path).exists():
-                log(f"Missing directory: {dir_path}", "ERROR")
-                return False
-        
-        return True
+    code, out, err = kubectl_get("pods")
+    if code != 0:
+        log(f"Failed to get pods: {err}", "ERROR")
+        return False
     
-    def fix_frontend_service(self):
-        """Fix frontend service selector to match deployment labels"""
-        section("Fix 1: Frontend Service Selector")
-        
-        service_file = self.repo_path / "helm/frontend/templates/service.yaml"
-        
-        if backup_file(service_file, self.backup_dir):
-            log(f"Backed up: {service_file.name}")
-        
-        write_file(service_file, FRONTEND_SERVICE_YAML)
-        log("Updated frontend service.yaml with correct selector", "SUCCESS")
-        self.fixes_applied.append("Frontend service selector fixed (app: frontend)")
+    print(out)
     
-    def fix_frontend_helpers(self):
-        """Add missing _helpers.tpl to frontend chart"""
-        section("Fix 2: Frontend Helm Helpers")
-        
-        helpers_file = self.repo_path / "helm/frontend/templates/_helpers.tpl"
-        
-        if helpers_file.exists():
-            backup_file(helpers_file, self.backup_dir)
-            log(f"Backed up existing: {helpers_file.name}")
-        
-        write_file(helpers_file, FRONTEND_HELPERS_TPL)
-        log("Created frontend _helpers.tpl", "SUCCESS")
-        self.fixes_applied.append("Frontend _helpers.tpl created")
+    # Check for issues
+    issues = []
+    if "CrashLoopBackOff" in out:
+        issues.append("Some pods are in CrashLoopBackOff")
+    if "ImagePullBackOff" in out:
+        issues.append("Some pods have image pull issues")
+    if "Pending" in out:
+        issues.append("Some pods are pending")
+    if "0/1" in out or "0/2" in out:
+        issues.append("Some pods are not ready")
     
-    def fix_frontend_values(self):
-        """Fix frontend values.yaml to include container.port"""
-        section("Fix 3: Frontend Values")
-        
-        # Fix base values.yaml
-        values_file = self.repo_path / "helm/frontend/values.yaml"
-        if backup_file(values_file, self.backup_dir):
-            log(f"Backed up: {values_file.name}")
-        write_file(values_file, FRONTEND_VALUES_YAML)
-        log("Updated frontend values.yaml", "SUCCESS")
-        
-        # Fix values-dev.yaml
-        values_dev_file = self.repo_path / "helm/frontend/values-dev.yaml"
-        if backup_file(values_dev_file, self.backup_dir):
-            log(f"Backed up: {values_dev_file.name}")
-        write_file(values_dev_file, FRONTEND_VALUES_DEV_YAML)
-        log("Updated frontend values-dev.yaml", "SUCCESS")
-        
-        self.fixes_applied.append("Frontend values.yaml updated with container.port")
+    if issues:
+        for issue in issues:
+            log(issue, "WARNING")
+        return False
     
-    def fix_order_service_values(self):
-        """Fix order-service values-dev.yaml to include service.type"""
-        section("Fix 4: Order Service Values")
-        
-        values_file = self.repo_path / "helm/order-service/values-dev.yaml"
-        
-        if backup_file(values_file, self.backup_dir):
-            log(f"Backed up: {values_file.name}")
-        
-        write_file(values_file, ORDER_SERVICE_VALUES_DEV_YAML)
-        log("Updated order-service values-dev.yaml with service.type", "SUCCESS")
-        self.fixes_applied.append("Order-service values-dev.yaml fixed (service.type: ClusterIP)")
+    log("All pods appear healthy", "SUCCESS")
+    return True
+
+def check_services():
+    """Check services configuration"""
+    section("2. SERVICES")
     
-    def fix_product_service_values(self):
-        """Ensure product-service values are correct"""
-        section("Fix 5: Product Service Values")
-        
-        values_file = self.repo_path / "helm/product-service/values-dev.yaml"
-        
-        if backup_file(values_file, self.backup_dir):
-            log(f"Backed up: {values_file.name}")
-        
-        write_file(values_file, PRODUCT_SERVICE_VALUES_DEV_YAML)
-        log("Updated product-service values-dev.yaml", "SUCCESS")
-        self.fixes_applied.append("Product-service values-dev.yaml updated")
+    code, out, err = kubectl_get("services")
+    if code != 0:
+        log(f"Failed to get services: {err}", "ERROR")
+        return False
     
-    def generate_report(self):
-        """Generate a markdown report of all fixes"""
-        report_content = f"""# LeninKart Infrastructure Fix Report
+    print(out)
+    
+    # Check for required services
+    required = ["leninkart-frontend", "leninkart-product-service", "leninkart-order-service"]
+    missing = []
+    
+    for svc in required:
+        if svc not in out:
+            missing.append(svc)
+    
+    if missing:
+        log(f"Missing services: {', '.join(missing)}", "ERROR")
+        return False
+    
+    log("All required services exist", "SUCCESS")
+    return True
 
-## Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+def check_endpoints():
+    """Check if services have endpoints (CRITICAL)"""
+    section("3. ENDPOINTS (CRITICAL)")
+    
+    code, out, err = kubectl_get("endpoints")
+    if code != 0:
+        log(f"Failed to get endpoints: {err}", "ERROR")
+        return False
+    
+    print(out)
+    
+    # Check for <none> endpoints
+    issues = []
+    lines = out.strip().split('\n')
+    
+    for line in lines[1:]:  # Skip header
+        parts = line.split()
+        if len(parts) >= 2:
+            svc_name = parts[0]
+            endpoints = parts[1] if len(parts) > 1 else ""
+            
+            if endpoints == "<none>" or not endpoints:
+                issues.append(f"{svc_name} has NO endpoints (selector mismatch!)")
+    
+    if issues:
+        for issue in issues:
+            log(issue, "ERROR")
+        log("Services with <none> endpoints cannot route traffic!", "ERROR")
+        return False
+    
+    log("All services have endpoints", "SUCCESS")
+    return True
 
-## Summary
-- **Fixes Applied:** {len(self.fixes_applied)}
-- **Errors:** {len(self.errors)}
-- **Backup Location:** `{self.backup_dir.name}/`
+def check_ingress():
+    """Check ingress configuration"""
+    section("4. INGRESS")
+    
+    code, out, err = kubectl_get("ingress")
+    if code != 0:
+        log(f"Failed to get ingress: {err}", "ERROR")
+        return False
+    
+    print(out)
+    
+    # Get detailed ingress info
+    code, out, err = run_kubectl(f"describe ingress leninkart-ingress -n {NAMESPACE}")
+    if code == 0:
+        print("\nIngress Details:")
+        print(out)
+    
+    return True
 
-## Fixes Applied
-
-"""
-        for i, fix in enumerate(self.fixes_applied, 1):
-            report_content += f"{i}. ✅ {fix}\n"
+def check_service_selectors():
+    """Check if service selectors match pod labels"""
+    section("5. SELECTOR MATCHING (ROOT CAUSE CHECK)")
+    
+    services_to_check = [
+        ("leninkart-product-service", "product-service"),
+        ("leninkart-order-service", "order-service"),
+        ("leninkart-frontend", "frontend"),
+    ]
+    
+    all_good = True
+    
+    for svc_name, expected_app in services_to_check:
+        print(f"\n{Colors.CYAN}Checking {svc_name}:{Colors.RESET}")
         
-        if self.errors:
-            report_content += "\n## Errors\n\n"
-            for error in self.errors:
-                report_content += f"- ❌ {error}\n"
+        # Get service selector
+        code, out, err = run_kubectl(
+            f"get svc {svc_name} -n {NAMESPACE} -o jsonpath='{{.spec.selector}}'"
+        )
         
-        report_content += """
-## Next Steps
+        if code != 0:
+            log(f"  Service {svc_name} not found", "ERROR")
+            all_good = False
+            continue
+        
+        print(f"  Service selector: {out}")
+        
+        # Get pods with matching labels
+        # Try to extract the selector key-value
+        selector_str = out.strip().strip("'")
+        
+        # Get pods
+        code, pods_out, err = run_kubectl(
+            f"get pods -n {NAMESPACE} -o wide --show-labels"
+        )
+        
+        if code == 0:
+            # Check if any pod matches
+            matching_pods = []
+            for line in pods_out.split('\n'):
+                if expected_app in line.lower() or f"app={expected_app}" in line:
+                    matching_pods.append(line.split()[0] if line.split() else "")
+            
+            if matching_pods:
+                log(f"  Found matching pods: {', '.join(matching_pods)}", "SUCCESS")
+            else:
+                log(f"  NO PODS MATCH the service selector!", "ERROR")
+                all_good = False
+    
+    return all_good
 
-### 1. Review Changes
-```bash
-git status
-git diff
-```
+def check_product_service_directly():
+    """Test product service directly via port-forward"""
+    section("6. DIRECT SERVICE TEST")
+    
+    log("To test product-service directly, run:", "INFO")
+    print(f"""
+{Colors.WHITE}# In terminal 1 - Start port-forward:{Colors.RESET}
+kubectl port-forward -n {NAMESPACE} svc/leninkart-product-service 8081:8081
 
-### 2. Commit and Push
-```bash
-git add .
-git commit -m "fix: correct service selectors and helm templates"
-git push origin dev
-```
-
-### 3. Sync ArgoCD
-```bash
-# Option A: Wait for auto-sync (2-3 minutes)
-
-# Option B: Force sync
-argocd app sync leninkart-root --force
-
-# Option C: Via ArgoCD UI
-# Go to ArgoCD dashboard and click "Sync" on leninkart-root
-```
-
-### 4. Verify Deployment
-```bash
-# Check all pods are running
-kubectl get pods -n dev
-
-# Check services have endpoints (should NOT show <none>)
-kubectl get endpoints -n dev
-
-# Check ingress
-kubectl get ingress -n dev
-kubectl describe ingress leninkart-ingress -n dev
-```
-
-### 5. Test Services Directly
-```bash
-# Test product service
-kubectl port-forward -n dev svc/leninkart-product-service 8081:8081
+{Colors.WHITE}# In terminal 2 - Test the endpoint:{Colors.RESET}
 curl http://localhost:8081/api/products
 
-# Test order service
-kubectl port-forward -n dev svc/leninkart-order-service 8080:8080
-curl http://localhost:8080/api/orders
-
-# Test frontend
-kubectl port-forward -n dev svc/leninkart-frontend 8082:80
-# Open http://localhost:8082 in browser
-```
-
-### 6. Test via Ingress
-```bash
-# Start minikube tunnel (if using minikube)
-minikube tunnel
-
-# Get ingress IP
-kubectl get ingress -n dev
-
-# Test endpoints
-curl http://<INGRESS_IP>/api/products
-curl http://<INGRESS_IP>/api/orders
-curl http://<INGRESS_IP>/
-```
-
-## Troubleshooting
-
-### If pods are still failing:
-```bash
-# Check pod logs
-kubectl logs -n dev -l app=frontend --tail=50
-kubectl logs -n dev -l app=product-service --tail=50
-kubectl logs -n dev -l app.kubernetes.io/name=order-service --tail=50
-
-# Describe pods for events
-kubectl describe pod -n dev -l app=frontend
-```
-
-### If services have no endpoints:
-```bash
-# Verify labels match
-kubectl get pods -n dev --show-labels
-kubectl get svc -n dev -o wide
-
-# The service selector must match pod labels exactly
-```
-
-### If ingress returns 404/502:
-```bash
-# Check ingress controller logs
-kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
-
-# Verify backend services exist
-kubectl describe ingress leninkart-ingress -n dev
-```
-"""
-        
-        report_file = self.repo_path / f"FIX_REPORT_{TIMESTAMP}.md"
-        write_file(report_file, report_content)
-        return report_file
-    
-    def run(self):
-        """Execute all fixes"""
-        header("LENINKART INFRASTRUCTURE AUTO-FIX")
-        
-        log(f"Repository: {self.repo_path}")
-        log(f"Timestamp: {TIMESTAMP}")
-        
-        # Validate repository
-        section("Validating Repository")
-        if not self.validate_repo():
-            log("This doesn't appear to be a valid leninkart-infra repository!", "ERROR")
-            log("Please run this script from the root of the leninkart-infra repo", "ERROR")
-            return False
-        log("Repository structure validated", "SUCCESS")
-        
-        # Create backup directory
-        self.backup_dir.mkdir(parents=True, exist_ok=True)
-        log(f"Backup directory: {self.backup_dir.name}", "INFO")
-        
-        # Apply fixes
-        try:
-            self.fix_frontend_service()
-            self.fix_frontend_helpers()
-            self.fix_frontend_values()
-            self.fix_order_service_values()
-            self.fix_product_service_values()
-        except Exception as e:
-            log(f"Error during fixes: {str(e)}", "ERROR")
-            self.errors.append(str(e))
-            return False
-        
-        # Generate report
-        section("Generating Report")
-        report_file = self.generate_report()
-        log(f"Report saved: {report_file.name}", "SUCCESS")
-        
-        # Print summary
-        header("FIX COMPLETE")
-        
-        print(f"\n{Colors.GREEN}✅ Applied {len(self.fixes_applied)} fixes:{Colors.RESET}")
-        for fix in self.fixes_applied:
-            print(f"   • {fix}")
-        
-        print(f"\n{Colors.CYAN}📁 Backup location: {self.backup_dir.name}/{Colors.RESET}")
-        print(f"{Colors.CYAN}📄 Report: {report_file.name}{Colors.RESET}")
-        
-        print(f"\n{Colors.YELLOW}{'='*70}{Colors.RESET}")
-        print(f"{Colors.YELLOW}{Colors.BOLD}NEXT STEPS:{Colors.RESET}")
-        print(f"{Colors.YELLOW}{'='*70}{Colors.RESET}")
-        
-        print(f"""
-{Colors.WHITE}1. Review changes:{Colors.RESET}
-   git status
-   git diff
-
-{Colors.WHITE}2. Commit and push:{Colors.RESET}
-   git add .
-   git commit -m "fix: correct service selectors and helm templates"
-   git push origin dev
-
-{Colors.WHITE}3. Sync ArgoCD:{Colors.RESET}
-   argocd app sync leninkart-root --force
-   
-   OR wait for auto-sync (2-3 minutes)
-
-{Colors.WHITE}4. Verify:{Colors.RESET}
-   kubectl get pods -n dev
-   kubectl get endpoints -n dev
+{Colors.WHITE}# Expected: [] (empty array) or list of products{Colors.RESET}
+{Colors.WHITE}# If you get connection refused, the pod isn't running or service is misconfigured{Colors.RESET}
 """)
-        
-        return True
 
+def check_pod_labels():
+    """Show all pod labels for debugging"""
+    section("7. POD LABELS (for selector matching)")
+    
+    code, out, err = run_kubectl(f"get pods -n {NAMESPACE} --show-labels")
+    if code == 0:
+        print(out)
+    else:
+        log(f"Failed: {err}", "ERROR")
+
+def check_deployment_labels():
+    """Check deployment and pod template labels"""
+    section("8. DEPLOYMENT POD TEMPLATE LABELS")
+    
+    deployments = ["product-service", "frontend"]
+    
+    for deploy in deployments:
+        code, out, err = run_kubectl(
+            f"get deployment -n {NAMESPACE} -l app={deploy} -o jsonpath='{{.items[*].spec.template.metadata.labels}}'"
+        )
+        if code == 0 and out:
+            print(f"{deploy}: {out}")
+        else:
+            # Try without label filter
+            code, out, err = run_kubectl(
+                f"get deployment {deploy} -n {NAMESPACE} -o jsonpath='{{.spec.template.metadata.labels}}'"
+            )
+            if code == 0:
+                print(f"{deploy}: {out}")
+            else:
+                log(f"Could not get labels for {deploy}", "WARNING")
+
+def generate_fix_commands():
+    """Generate commands to fix common issues"""
+    section("9. QUICK FIX COMMANDS")
+    
+    print(f"""
+{Colors.YELLOW}If endpoints show <none>, the service selector doesn't match pod labels.{Colors.RESET}
+
+{Colors.WHITE}Option 1: Patch the service selector (quick fix):{Colors.RESET}
+
+# For product-service (if pods have label app=product-service):
+kubectl patch svc leninkart-product-service -n {NAMESPACE} -p '{{"spec":{{"selector":{{"app":"product-service"}}}}}}'
+
+# For order-service (if pods have labels app.kubernetes.io/name=order-service):
+kubectl patch svc leninkart-order-service -n {NAMESPACE} -p '{{"spec":{{"selector":{{"app.kubernetes.io/name":"order-service"}}}}}}'
+
+# For frontend:
+kubectl patch svc leninkart-frontend -n {NAMESPACE} -p '{{"spec":{{"selector":{{"app":"frontend"}}}}}}'
+
+{Colors.WHITE}Option 2: Force ArgoCD to resync:{Colors.RESET}
+argocd app sync leninkart-root --force --prune
+
+{Colors.WHITE}Option 3: Delete and let ArgoCD recreate:{Colors.RESET}
+kubectl delete svc leninkart-product-service leninkart-order-service leninkart-frontend -n {NAMESPACE}
+# Wait for ArgoCD to recreate them
+
+{Colors.WHITE}Verify endpoints after fix:{Colors.RESET}
+kubectl get endpoints -n {NAMESPACE}
+""")
 
 # ============================================================
 # MAIN
 # ============================================================
 
 def main():
-    """Main entry point"""
-    # Get repository path from command line or use current directory
-    if len(sys.argv) > 1:
-        repo_path = sys.argv[1]
+    header("LENINKART KUBERNETES DIAGNOSTICS")
+    
+    log(f"Namespace: {NAMESPACE}")
+    
+    # Run all checks
+    results = {
+        "pods": check_pods(),
+        "services": check_services(),
+        "endpoints": check_endpoints(),
+        "selectors": check_service_selectors(),
+    }
+    
+    check_ingress()
+    check_pod_labels()
+    check_deployment_labels()
+    check_product_service_directly()
+    generate_fix_commands()
+    
+    # Summary
+    header("DIAGNOSIS SUMMARY")
+    
+    if not results["endpoints"]:
+        log("ROOT CAUSE: Service endpoints are empty!", "ERROR")
+        log("The service selector does not match any pod labels.", "ERROR")
+        log("Run the patch commands above to fix.", "INFO")
+    elif not results["pods"]:
+        log("ROOT CAUSE: Pods are not healthy!", "ERROR")
+        log("Check pod logs: kubectl logs -n dev <pod-name>", "INFO")
+    elif not results["services"]:
+        log("ROOT CAUSE: Services are missing!", "ERROR")
+        log("Check ArgoCD sync status", "INFO")
     else:
-        repo_path = "."
+        log("Basic checks passed. Issue may be in ingress routing.", "WARNING")
+        log("Try testing services directly via port-forward.", "INFO")
     
-    # Check if path exists
-    if not Path(repo_path).exists():
-        log(f"Path does not exist: {repo_path}", "ERROR")
-        sys.exit(1)
-    
-    # Run fixer
-    fixer = InfraFixer(repo_path)
-    success = fixer.run()
-    
-    sys.exit(0 if success else 1)
-
+    print()
 
 if __name__ == "__main__":
     main()
