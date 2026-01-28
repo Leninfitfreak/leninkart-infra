@@ -6,23 +6,34 @@ metadata:
 spec:
   serviceName: kafka
   replicas: 1
+
   selector:
     matchLabels:
       app: kafka
+
   template:
     metadata:
       labels:
         app: kafka
     spec:
+      # ==========================================================
+      # 🔐 CRITICAL FIX: Allow Kafka (uid 1000) to write to PVC
+      # ==========================================================
+      securityContext:
+        fsGroup: 1000
+
       containers:
         - name: kafka
           image: confluentinc/cp-kafka:7.5.0
 
           ports:
-            - containerPort: 9092
-            - containerPort: 9093
+            - name: broker
+              containerPort: 9092
+            - name: controller
+              containerPort: 9093
 
           env:
+            # ---------------- KRaft MODE ----------------
             - name: KAFKA_PROCESS_ROLES
               value: "broker,controller"
 
@@ -35,6 +46,7 @@ spec:
             - name: KAFKA_CONTROLLER_QUORUM_VOTERS
               value: "1@kafka-0.kafka.dev.svc.cluster.local:9093"
 
+            # ---------------- LISTENERS ----------------
             - name: KAFKA_LISTENERS
               value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
 
@@ -44,19 +56,17 @@ spec:
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
               value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
 
-            - name: KAFKA_CONTROLLER_LISTENER_NAMES
-              value: "CONTROLLER"
-
             - name: KAFKA_INTER_BROKER_LISTENER_NAME
               value: "PLAINTEXT"
 
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+
+            # ---------------- STORAGE ----------------
             - name: KAFKA_LOG_DIRS
               value: "/var/lib/kafka/data"
 
-            # ============================================
-            # CRITICAL FIX: Set replication factor to 1
-            # (Required for single-broker setup)
-            # ============================================
+            # ---------------- SINGLE NODE SAFETY ----------------
             - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
               value: "1"
 
@@ -76,13 +86,15 @@ spec:
             - name: kafka-data
               mountPath: /var/lib/kafka/data
 
+  # ==========================================================
+  # 💾 PERSISTENT VOLUME (AUTO-CREATES PVC)
+  # ==========================================================
   volumeClaimTemplates:
     - metadata:
         name: kafka-data
       spec:
         accessModes:
           - ReadWriteOnce
-        storageClassName: standard
         resources:
           requests:
             storage: 5Gi
