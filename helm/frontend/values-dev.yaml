@@ -1,17 +1,13 @@
 replicaCount: 1
-
 image:
   repository: leninfitfreak/frontend
-  tag: '21358876499'
+  tag: '21445431595'
   pullPolicy: IfNotPresent
-
 service:
   type: ClusterIP
   port: 80
-
 container:
   port: 80
-
 resources:
   requests:
     cpu: 100m
@@ -19,7 +15,6 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
-
 readinessProbe:
   httpGet:
     path: /
@@ -27,7 +22,6 @@ readinessProbe:
   initialDelaySeconds: 10
   periodSeconds: 10
   failureThreshold: 5
-
 livenessProbe:
   httpGet:
     path: /
