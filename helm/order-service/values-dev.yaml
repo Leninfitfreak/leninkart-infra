@@ -60,3 +60,24 @@ otel:
 annotations:
   prometheus.io/scrape: "true"
   prometheus.io/port: "8080"
+
+# ============================================
+# VAULT SECRETS INTEGRATION
+# ============================================
+# Secrets are now managed by HashiCorp Vault via External Secrets Operator
+# 
+# To enable Vault secrets in deployments, add envFrom to your deployment:
+#
+# envFrom:
+#   - secretRef:
+#       name: product-service-db-secret
+#   - secretRef:
+#       name: product-service-config-secret
+#
+# This replaces hardcoded environment variables with Vault-managed secrets
+
+secrets:
+  vault:
+    enabled: true
+    secretStore: vault-backend
+    refreshInterval: 1h
