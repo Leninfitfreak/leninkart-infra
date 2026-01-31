@@ -45,3 +45,18 @@ env:
   SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-0.kafka.dev.svc.cluster.local:9092
   MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
   MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+
+
+# ============================================
+# OPENTELEMETRY CONFIGURATION
+# ============================================
+otel:
+  enabled: true
+  javaAgent:
+    version: "1.32.0"
+  serviceName: "order-service"
+  endpoint: "http://otel-collector:4318"
+
+annotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"

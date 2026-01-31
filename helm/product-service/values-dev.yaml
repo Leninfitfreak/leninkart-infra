@@ -44,3 +44,18 @@ env:
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
   SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: 'true'
   SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-0.kafka.dev.svc.cluster.local:9092
+
+
+# ============================================
+# OPENTELEMETRY CONFIGURATION
+# ============================================
+otel:
+  enabled: true
+  javaAgent:
+    version: "1.32.0"
+  serviceName: "product-service"
+  endpoint: "http://otel-collector:4318"
+
+annotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8081"

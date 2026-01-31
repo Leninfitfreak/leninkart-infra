@@ -290,370 +290,273 @@ if __name__ == "__main__":
 #!/usr/bin/env python3
 """
 LeninKart Kubernetes Diagnostic Script
-======================================
-This script helps diagnose why /api/products returns 404
-
-Run this on a machine with kubectl access to your cluster.
-
-Usage: python leninkart_diagnose.py
+=======================================
+Analyzes the entire Kubernetes deployment to identify issues.
+Run this and share the output!
 """
 
 import subprocess
+import json
 import sys
-import re
+from datetime import datetime
 
-NAMESPACE = "dev"
+# ANSI color codes
+GREEN = '\033[92m'
+RED = '\033[91m'
+YELLOW = '\033[93m'
+BLUE = '\033[94m'
+RESET = '\033[0m'
 
-# ============================================================
-# COLORS
-# ============================================================
-
-class Colors:
-    RED = '\033[91m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    BLUE = '\033[94m'
-    MAGENTA = '\033[95m'
-    CYAN = '\033[96m'
-    WHITE = '\033[97m'
-    BOLD = '\033[1m'
-    RESET = '\033[0m'
-
-def log(msg, level="INFO"):
-    colors = {
-        "INFO": Colors.BLUE,
-        "SUCCESS": Colors.GREEN,
-        "WARNING": Colors.YELLOW,
-        "ERROR": Colors.RED,
-        "HEADER": Colors.MAGENTA + Colors.BOLD,
-    }
-    color = colors.get(level, Colors.WHITE)
-    print(f"{color}[{level}]{Colors.RESET} {msg}")
-
-def header(title):
-    print()
-    print(f"{Colors.CYAN}{'='*70}{Colors.RESET}")
-    print(f"{Colors.CYAN}{Colors.BOLD}{title.center(70)}{Colors.RESET}")
-    print(f"{Colors.CYAN}{'='*70}{Colors.RESET}")
-
-def section(title):
-    print()
-    print(f"{Colors.YELLOW}{'-'*70}{Colors.RESET}")
-    print(f"{Colors.YELLOW}▶ {title}{Colors.RESET}")
-    print(f"{Colors.YELLOW}{'-'*70}{Colors.RESET}")
-
-# ============================================================
-# KUBECTL HELPERS
-# ============================================================
-
-def run_kubectl(cmd, capture=True):
-    """Run kubectl command and return output"""
-    full_cmd = f"kubectl {cmd}"
+def run_cmd(cmd):
+    """Run a kubectl command and return output"""
     try:
         result = subprocess.run(
-            full_cmd,
+            cmd,
             shell=True,
-            capture_output=capture,
+            capture_output=True,
             text=True,
             timeout=30
         )
-        return result.returncode, result.stdout, result.stderr
-    except subprocess.TimeoutExpired:
-        return -1, "", "Command timed out"
+        return result.stdout, result.stderr, result.returncode
     except Exception as e:
-        return -1, "", str(e)
+        return "", str(e), 1
 
-def kubectl_get(resource, namespace=NAMESPACE, output="wide"):
-    """Get kubernetes resources"""
-    cmd = f"get {resource} -n {namespace}"
-    if output:
-        cmd += f" -o {output}"
-    return run_kubectl(cmd)
+def log(msg, color=RESET):
+    """Print colored log message"""
+    print(f"{color}[DIAG] {msg}{RESET}")
 
-# ============================================================
-# DIAGNOSTIC CHECKS
-# ============================================================
+def section(title):
+    """Print section header"""
+    print(f"\n{BLUE}{'='*70}{RESET}")
+    print(f"{BLUE}{title}{RESET}")
+    print(f"{BLUE}{'='*70}{RESET}\n")
 
 def check_pods():
-    """Check if all pods are running"""
+    """Check pod status"""
     section("1. POD STATUS")
+    stdout, stderr, code = run_cmd("kubectl get pods -n dev -o wide")
+    print(stdout)
     
-    code, out, err = kubectl_get("pods")
-    if code != 0:
-        log(f"Failed to get pods: {err}", "ERROR")
-        return False
-    
-    print(out)
-    
-    # Check for issues
+    # Parse and analyze
+    lines = stdout.strip().split('\n')[1:]  # Skip header
     issues = []
-    if "CrashLoopBackOff" in out:
-        issues.append("Some pods are in CrashLoopBackOff")
-    if "ImagePullBackOff" in out:
-        issues.append("Some pods have image pull issues")
-    if "Pending" in out:
-        issues.append("Some pods are pending")
-    if "0/1" in out or "0/2" in out:
-        issues.append("Some pods are not ready")
+    for line in lines:
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        name, ready, status = parts[0], parts[1], parts[2]
+        
+        if status != "Running":
+            issues.append(f"{RED}✗ {name}: {status}{RESET}")
+        elif ready != "1/1":
+            issues.append(f"{YELLOW}⚠ {name}: Ready {ready}{RESET}")
+        else:
+            print(f"{GREEN}✓ {name}: Running and Ready{RESET}")
     
     if issues:
+        print("\nISSUES FOUND:")
         for issue in issues:
-            log(issue, "WARNING")
-        return False
+            print(issue)
     
-    log("All pods appear healthy", "SUCCESS")
-    return True
+    return len(issues) == 0
 
 def check_services():
-    """Check services configuration"""
-    section("2. SERVICES")
+    """Check service configuration"""
+    section("2. SERVICE STATUS")
+    stdout, _, _ = run_cmd("kubectl get svc -n dev -o wide")
+    print(stdout)
     
-    code, out, err = kubectl_get("services")
-    if code != 0:
-        log(f"Failed to get services: {err}", "ERROR")
-        return False
+    section("2a. SERVICE ENDPOINTS")
+    stdout, _, _ = run_cmd("kubectl get endpoints -n dev")
+    print(stdout)
     
-    print(out)
-    
-    # Check for required services
-    required = ["leninkart-frontend", "leninkart-product-service", "leninkart-order-service"]
-    missing = []
-    
-    for svc in required:
-        if svc not in out:
-            missing.append(svc)
-    
-    if missing:
-        log(f"Missing services: {', '.join(missing)}", "ERROR")
-        return False
-    
-    log("All required services exist", "SUCCESS")
-    return True
-
-def check_endpoints():
-    """Check if services have endpoints (CRITICAL)"""
-    section("3. ENDPOINTS (CRITICAL)")
-    
-    code, out, err = kubectl_get("endpoints")
-    if code != 0:
-        log(f"Failed to get endpoints: {err}", "ERROR")
-        return False
-    
-    print(out)
-    
-    # Check for <none> endpoints
+    # Check for services with no endpoints
+    lines = stdout.strip().split('\n')[1:]
     issues = []
-    lines = out.strip().split('\n')
-    
-    for line in lines[1:]:  # Skip header
+    for line in lines:
         parts = line.split()
-        if len(parts) >= 2:
-            svc_name = parts[0]
-            endpoints = parts[1] if len(parts) > 1 else ""
-            
-            if endpoints == "<none>" or not endpoints:
-                issues.append(f"{svc_name} has NO endpoints (selector mismatch!)")
+        if len(parts) < 2:
+            continue
+        name, endpoints = parts[0], parts[1]
+        
+        if endpoints == "<none>" or not endpoints:
+            issues.append(f"{RED}✗ {name}: NO ENDPOINTS{RESET}")
+        else:
+            print(f"{GREEN}✓ {name}: {endpoints}{RESET}")
     
     if issues:
+        print("\nSERVICE ISSUES:")
         for issue in issues:
-            log(issue, "ERROR")
-        log("Services with <none> endpoints cannot route traffic!", "ERROR")
-        return False
+            print(issue)
     
-    log("All services have endpoints", "SUCCESS")
-    return True
-
-def check_ingress():
-    """Check ingress configuration"""
-    section("4. INGRESS")
-    
-    code, out, err = kubectl_get("ingress")
-    if code != 0:
-        log(f"Failed to get ingress: {err}", "ERROR")
-        return False
-    
-    print(out)
-    
-    # Get detailed ingress info
-    code, out, err = run_kubectl(f"describe ingress leninkart-ingress -n {NAMESPACE}")
-    if code == 0:
-        print("\nIngress Details:")
-        print(out)
-    
-    return True
+    return len(issues) == 0
 
 def check_service_selectors():
     """Check if service selectors match pod labels"""
-    section("5. SELECTOR MATCHING (ROOT CAUSE CHECK)")
+    section("3. SERVICE SELECTOR VALIDATION")
     
-    services_to_check = [
-        ("leninkart-product-service", "product-service"),
-        ("leninkart-order-service", "order-service"),
-        ("leninkart-frontend", "frontend"),
-    ]
+    services = ["leninkart-frontend", "leninkart-product-service", "leninkart-order-service"]
+    all_match = True
     
-    all_good = True
-    
-    for svc_name, expected_app in services_to_check:
-        print(f"\n{Colors.CYAN}Checking {svc_name}:{Colors.RESET}")
+    for svc in services:
+        log(f"Checking {svc}...")
         
         # Get service selector
-        code, out, err = run_kubectl(
-            f"get svc {svc_name} -n {NAMESPACE} -o jsonpath='{{.spec.selector}}'"
-        )
+        stdout, _, _ = run_cmd(f"kubectl get svc {svc} -n dev -o jsonpath='{{.spec.selector}}'")
+        print(f"  Service selector: {stdout}")
         
-        if code != 0:
-            log(f"  Service {svc_name} not found", "ERROR")
-            all_good = False
-            continue
-        
-        print(f"  Service selector: {out}")
-        
-        # Get pods with matching labels
-        # Try to extract the selector key-value
-        selector_str = out.strip().strip("'")
-        
-        # Get pods
-        code, pods_out, err = run_kubectl(
-            f"get pods -n {NAMESPACE} -o wide --show-labels"
-        )
-        
-        if code == 0:
-            # Check if any pod matches
-            matching_pods = []
-            for line in pods_out.split('\n'):
-                if expected_app in line.lower() or f"app={expected_app}" in line:
-                    matching_pods.append(line.split()[0] if line.split() else "")
+        # Get matching pods
+        # Extract selector pairs from JSON
+        try:
+            selector_dict = json.loads(stdout.replace("'", '"'))
+            selector_parts = [f"{k}={v}" for k, v in selector_dict.items()]
+            selector_str = ",".join(selector_parts)
             
-            if matching_pods:
-                log(f"  Found matching pods: {', '.join(matching_pods)}", "SUCCESS")
+            stdout, _, _ = run_cmd(f"kubectl get pods -n dev -l {selector_str} -o name")
+            matching_pods = stdout.strip().split('\n') if stdout.strip() else []
+            
+            if matching_pods and matching_pods[0]:
+                print(f"{GREEN}  ✓ Matching pods: {len(matching_pods)}{RESET}")
+                for pod in matching_pods[:3]:  # Show first 3
+                    print(f"    - {pod}")
             else:
-                log(f"  NO PODS MATCH the service selector!", "ERROR")
-                all_good = False
+                print(f"{RED}  ✗ NO MATCHING PODS FOUND!{RESET}")
+                all_match = False
+        except Exception as e:
+            print(f"{RED}  ✗ Error parsing selector: {e}{RESET}")
+            all_match = False
+        
+        print()
     
-    return all_good
+    return all_match
 
-def check_product_service_directly():
-    """Test product service directly via port-forward"""
-    section("6. DIRECT SERVICE TEST")
+def check_ingress():
+    """Check ingress configuration"""
+    section("4. INGRESS STATUS")
+    stdout, _, _ = run_cmd("kubectl get ingress -n dev")
+    print(stdout)
     
-    log("To test product-service directly, run:", "INFO")
-    print(f"""
-{Colors.WHITE}# In terminal 1 - Start port-forward:{Colors.RESET}
-kubectl port-forward -n {NAMESPACE} svc/leninkart-product-service 8081:8081
+    section("4a. INGRESS DETAILS")
+    stdout, _, _ = run_cmd("kubectl describe ingress leninkart-ingress -n dev")
+    print(stdout)
 
-{Colors.WHITE}# In terminal 2 - Test the endpoint:{Colors.RESET}
-curl http://localhost:8081/api/products
-
-{Colors.WHITE}# Expected: [] (empty array) or list of products{Colors.RESET}
-{Colors.WHITE}# If you get connection refused, the pod isn't running or service is misconfigured{Colors.RESET}
-""")
-
-def check_pod_labels():
-    """Show all pod labels for debugging"""
-    section("7. POD LABELS (for selector matching)")
+def check_ingress_controller():
+    """Check ingress controller status"""
+    section("5. INGRESS CONTROLLER")
+    stdout, _, _ = run_cmd("kubectl get pods -n ingress-nginx")
+    print(stdout)
     
-    code, out, err = run_kubectl(f"get pods -n {NAMESPACE} --show-labels")
-    if code == 0:
-        print(out)
-    else:
-        log(f"Failed: {err}", "ERROR")
-
-def check_deployment_labels():
-    """Check deployment and pod template labels"""
-    section("8. DEPLOYMENT POD TEMPLATE LABELS")
+    section("5a. INGRESS CONTROLLER LOGS (Last 30 lines)")
+    stdout, _, _ = run_cmd("kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx --tail=30")
     
-    deployments = ["product-service", "frontend"]
-    
-    for deploy in deployments:
-        code, out, err = run_kubectl(
-            f"get deployment -n {NAMESPACE} -l app={deploy} -o jsonpath='{{.items[*].spec.template.metadata.labels}}'"
-        )
-        if code == 0 and out:
-            print(f"{deploy}: {out}")
+    # Highlight warnings
+    for line in stdout.split('\n'):
+        if "does not have any active Endpoint" in line:
+            print(f"{RED}{line}{RESET}")
+        elif "WARN" in line or "ERROR" in line:
+            print(f"{YELLOW}{line}{RESET}")
         else:
-            # Try without label filter
-            code, out, err = run_kubectl(
-                f"get deployment {deploy} -n {NAMESPACE} -o jsonpath='{{.spec.template.metadata.labels}}'"
-            )
-            if code == 0:
-                print(f"{deploy}: {out}")
-            else:
-                log(f"Could not get labels for {deploy}", "WARNING")
+            print(line)
 
-def generate_fix_commands():
-    """Generate commands to fix common issues"""
-    section("9. QUICK FIX COMMANDS")
+def check_connectivity():
+    """Test internal connectivity"""
+    section("6. CONNECTIVITY TESTS")
     
-    print(f"""
-{Colors.YELLOW}If endpoints show <none>, the service selector doesn't match pod labels.{Colors.RESET}
-
-{Colors.WHITE}Option 1: Patch the service selector (quick fix):{Colors.RESET}
-
-# For product-service (if pods have label app=product-service):
-kubectl patch svc leninkart-product-service -n {NAMESPACE} -p '{{"spec":{{"selector":{{"app":"product-service"}}}}}}'
-
-# For order-service (if pods have labels app.kubernetes.io/name=order-service):
-kubectl patch svc leninkart-order-service -n {NAMESPACE} -p '{{"spec":{{"selector":{{"app.kubernetes.io/name":"order-service"}}}}}}'
-
-# For frontend:
-kubectl patch svc leninkart-frontend -n {NAMESPACE} -p '{{"spec":{{"selector":{{"app":"frontend"}}}}}}'
-
-{Colors.WHITE}Option 2: Force ArgoCD to resync:{Colors.RESET}
-argocd app sync leninkart-root --force --prune
-
-{Colors.WHITE}Option 3: Delete and let ArgoCD recreate:{Colors.RESET}
-kubectl delete svc leninkart-product-service leninkart-order-service leninkart-frontend -n {NAMESPACE}
-# Wait for ArgoCD to recreate them
-
-{Colors.WHITE}Verify endpoints after fix:{Colors.RESET}
-kubectl get endpoints -n {NAMESPACE}
-""")
-
-# ============================================================
-# MAIN
-# ============================================================
-
-def main():
-    header("LENINKART KUBERNETES DIAGNOSTICS")
+    services = [
+        ("Product Service", "leninkart-product-service.dev.svc.cluster.local:8081/api/products"),
+        ("Order Service", "leninkart-order-service.dev.svc.cluster.local:8080/api/orders"),
+        ("Frontend", "leninkart-frontend.dev.svc.cluster.local:80"),
+    ]
     
-    log(f"Namespace: {NAMESPACE}")
+    for name, url in services:
+        log(f"Testing {name}...")
+        cmd = f"kubectl run test-curl-{name.lower().replace(' ', '-')} --rm -i --restart=Never --image=curlimages/curl --timeout=10s -- curl -s -o /dev/null -w '%{{http_code}}' http://{url}"
+        stdout, stderr, code = run_cmd(cmd)
+        
+        if "200" in stdout:
+            print(f"{GREEN}  ✓ {name}: HTTP 200 OK{RESET}")
+        elif stdout.strip():
+            print(f"{YELLOW}  ⚠ {name}: HTTP {stdout.strip()}{RESET}")
+        else:
+            print(f"{RED}  ✗ {name}: FAILED - {stderr[:100]}{RESET}")
+        print()
+
+def check_backend_health():
+    """Check backend service health"""
+    section("7. BACKEND SERVICE HEALTH")
     
-    # Run all checks
-    results = {
-        "pods": check_pods(),
-        "services": check_services(),
-        "endpoints": check_endpoints(),
-        "selectors": check_service_selectors(),
-    }
-    
-    check_ingress()
-    check_pod_labels()
-    check_deployment_labels()
-    check_product_service_directly()
-    generate_fix_commands()
-    
-    # Summary
-    header("DIAGNOSIS SUMMARY")
-    
-    if not results["endpoints"]:
-        log("ROOT CAUSE: Service endpoints are empty!", "ERROR")
-        log("The service selector does not match any pod labels.", "ERROR")
-        log("Run the patch commands above to fix.", "INFO")
-    elif not results["pods"]:
-        log("ROOT CAUSE: Pods are not healthy!", "ERROR")
-        log("Check pod logs: kubectl logs -n dev <pod-name>", "INFO")
-    elif not results["services"]:
-        log("ROOT CAUSE: Services are missing!", "ERROR")
-        log("Check ArgoCD sync status", "INFO")
-    else:
-        log("Basic checks passed. Issue may be in ingress routing.", "WARNING")
-        log("Try testing services directly via port-forward.", "INFO")
+    # Check product-service logs
+    log("Product Service Recent Logs:")
+    stdout, _, _ = run_cmd("kubectl logs -n dev -l app=product-service --tail=10")
+    print(stdout[-500:] if len(stdout) > 500 else stdout)
     
     print()
+    
+    # Check order-service logs
+    log("Order Service Recent Logs:")
+    stdout, _, _ = run_cmd("kubectl logs -n dev -l app.kubernetes.io/name=order-service --tail=10")
+    print(stdout[-500:] if len(stdout) > 500 else stdout)
+
+def check_frontend_image():
+    """Check frontend image and age"""
+    section("8. FRONTEND IMAGE INFO")
+    stdout, _, _ = run_cmd("kubectl get pods -n dev -l app=frontend -o jsonpath='{.items[0].spec.containers[0].image}'")
+    print(f"Image: {stdout}")
+    
+    stdout, _, _ = run_cmd("kubectl get pods -n dev -l app=frontend -o jsonpath='{.items[0].metadata.creationTimestamp}'")
+    print(f"Pod Created: {stdout}")
+    
+    stdout, _, _ = run_cmd("kubectl get pods -n dev -l app=frontend -o jsonpath='{.items[0].status.containerStatuses[0].restartCount}'")
+    print(f"Restart Count: {stdout}")
+
+def main():
+    """Main diagnostic routine"""
+    print(f"\n{GREEN}LeninKart Kubernetes Diagnostic Script{RESET}")
+    print(f"{GREEN}Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{RESET}\n")
+    
+    results = {}
+    
+    results['pods'] = check_pods()
+    results['services'] = check_services()
+    results['selectors'] = check_service_selectors()
+    
+    check_ingress()
+    check_ingress_controller()
+    
+    # Skip connectivity tests if basic checks failed
+    if results['pods'] and results['services']:
+        check_connectivity()
+    else:
+        section("6. CONNECTIVITY TESTS")
+        print(f"{YELLOW}Skipped - Fix pods and services first{RESET}")
+    
+    check_backend_health()
+    check_frontend_image()
+    
+    # Summary
+    section("SUMMARY")
+    all_good = all(results.values())
+    
+    if all_good:
+        print(f"{GREEN}✓ All basic checks passed!{RESET}")
+        print(f"{YELLOW}If app still not working, check ingress controller and connectivity tests above.{RESET}")
+    else:
+        print(f"{RED}✗ Issues found:{RESET}")
+        for check, passed in results.items():
+            status = f"{GREEN}✓{RESET}" if passed else f"{RED}✗{RESET}"
+            print(f"  {status} {check.upper()}")
+    
+    print(f"\n{BLUE}Diagnostic complete!{RESET}\n")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print(f"\n{YELLOW}Diagnostic interrupted by user{RESET}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n{RED}Error: {e}{RESET}")
+        sys.exit(1)
 ```
 
 ### FILE: helm_order-service_values-dev.yaml
@@ -1089,19 +992,15 @@ version: 0.1.0
 ### FILE: helm\frontend\values-dev.yaml
 ```
 replicaCount: 1
-
 image:
   repository: leninfitfreak/frontend
-  tag: '21358876499'
+  tag: '21484612250'
   pullPolicy: IfNotPresent
-
 service:
   type: ClusterIP
   port: 80
-
 container:
   port: 80
-
 resources:
   requests:
     cpu: 100m
@@ -1109,7 +1008,6 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
-
 readinessProbe:
   httpGet:
     path: /
@@ -1117,7 +1015,6 @@ readinessProbe:
   initialDelaySeconds: 10
   periodSeconds: 10
   failureThreshold: 5
-
 livenessProbe:
   httpGet:
     path: /
@@ -1377,12 +1274,6 @@ env:
   SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "60000"
   # ---------- KAFKA ----------
   SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-0.kafka.dev.svc.cluster.local:9092
-<<<<<<< HEAD
-
-  # ---------- ACTUATOR (CRITICAL FOR K8s PROBES) ----------
-=======
-  # ---------- ACTUATOR (CRITICAL FIX) ----------
->>>>>>> 9fdd1b053b4c1861e54ecf8cd5601a1dd796adce
   MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
   MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
 ```
@@ -1522,16 +1413,13 @@ version: 0.1.0
 ### FILE: helm\product-service\values-dev.yaml
 ```
 replicaCount: 1
-
 image:
   repository: leninfitfreak/product-service
-  tag: '21359431490'
+  tag: '21446557191'
   pullPolicy: IfNotPresent
-
 service:
   type: ClusterIP
   port: 8081
-
 resources:
   requests:
     cpu: 100m
@@ -1539,7 +1427,6 @@ resources:
   limits:
     cpu: 300m
     memory: 256Mi
-
 startupProbe:
   httpGet:
     path: /actuator/health
@@ -1547,7 +1434,6 @@ startupProbe:
   initialDelaySeconds: 60
   periodSeconds: 10
   failureThreshold: 30
-
 readinessProbe:
   httpGet:
     path: /actuator/health
@@ -1555,7 +1441,6 @@ readinessProbe:
   initialDelaySeconds: 30
   periodSeconds: 10
   failureThreshold: 6
-
 livenessProbe:
   httpGet:
     path: /actuator/health
@@ -1563,7 +1448,6 @@ livenessProbe:
   initialDelaySeconds: 60
   periodSeconds: 20
   failureThreshold: 10
-
 env:
   SERVER_PORT: "8081"
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
@@ -1630,11 +1514,6 @@ spec:
 
 ### DIRECTORY: k8s\kafka/
 
-### FILE: k8s\kafka\kafka-pvc.yaml
-```
-
-```
-
 ### FILE: k8s\kafka\kafka-service.yaml
 ```
 apiVersion: v1
@@ -1663,23 +1542,34 @@ metadata:
 spec:
   serviceName: kafka
   replicas: 1
+
   selector:
     matchLabels:
       app: kafka
+
   template:
     metadata:
       labels:
         app: kafka
     spec:
+      # ==========================================================
+      # 🔐 CRITICAL FIX: Allow Kafka (uid 1000) to write to PVC
+      # ==========================================================
+      securityContext:
+        fsGroup: 1000
+
       containers:
         - name: kafka
           image: confluentinc/cp-kafka:7.5.0
 
           ports:
-            - containerPort: 9092
-            - containerPort: 9093
+            - name: broker
+              containerPort: 9092
+            - name: controller
+              containerPort: 9093
 
           env:
+            # ---------------- KRaft MODE ----------------
             - name: KAFKA_PROCESS_ROLES
               value: "broker,controller"
 
@@ -1692,6 +1582,7 @@ spec:
             - name: KAFKA_CONTROLLER_QUORUM_VOTERS
               value: "1@kafka-0.kafka.dev.svc.cluster.local:9093"
 
+            # ---------------- LISTENERS ----------------
             - name: KAFKA_LISTENERS
               value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
 
@@ -1701,19 +1592,17 @@ spec:
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
               value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
 
-            - name: KAFKA_CONTROLLER_LISTENER_NAMES
-              value: "CONTROLLER"
-
             - name: KAFKA_INTER_BROKER_LISTENER_NAME
               value: "PLAINTEXT"
 
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+
+            # ---------------- STORAGE ----------------
             - name: KAFKA_LOG_DIRS
               value: "/var/lib/kafka/data"
 
-            # ============================================
-            # CRITICAL FIX: Set replication factor to 1
-            # (Required for single-broker setup)
-            # ============================================
+            # ---------------- SINGLE NODE SAFETY ----------------
             - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
               value: "1"
 
@@ -1733,6 +1622,9 @@ spec:
             - name: kafka-data
               mountPath: /var/lib/kafka/data
 
+  # ==========================================================
+  # 💾 PERSISTENT VOLUME (AUTO-CREATES PVC)
+  # ==========================================================
   volumeClaimTemplates:
     - metadata:
         name: kafka-data
@@ -1833,6 +1725,169 @@ spec:
         resources:
           requests:
             storage: 8Gi
+```
+
+### DIRECTORY: _auto_fix_backup_20260128_065718/
+
+### DIRECTORY: _auto_fix_backup_20260128_065718\helm/
+
+### DIRECTORY: _auto_fix_backup_20260128_065718\helm\order-service/
+
+### FILE: _auto_fix_backup_20260128_065718\helm\order-service\values-dev.yaml
+```
+replicaCount: 1
+image:
+  repository: leninfitfreak/order-service
+  tag: "21405007976"
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 8080
+startupProbe:
+  tcpSocket:
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  failureThreshold: 60
+readinessProbe:
+  httpGet:
+    path: /actuator/health/readiness
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 6
+livenessProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: 8080
+  initialDelaySeconds: 60
+  periodSeconds: 20
+  failureThreshold: 10
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
+env:
+  # ---------- DATABASE ----------
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
+  SPRING_DATASOURCE_USERNAME: postgres
+  SPRING_DATASOURCE_PASSWORD: postgres
+  SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+  SPRING_JPA_HIBERNATE_DDL_AUTO: update
+  SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "60000"
+  # ---------- KAFKA ----------
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-0.kafka.dev.svc.cluster.local:9092
+<<<<<<< HEAD
+
+  # ---------- ACTUATOR (CRITICAL FOR K8s PROBES) ----------
+=======
+  # ---------- ACTUATOR (CRITICAL FIX) ----------
+>>>>>>> 9fdd1b053b4c1861e54ecf8cd5601a1dd796adce
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+```
+
+### DIRECTORY: _auto_fix_backup_20260128_065718\k8s/
+
+### DIRECTORY: _auto_fix_backup_20260128_065718\k8s\kafka/
+
+### FILE: _auto_fix_backup_20260128_065718\k8s\kafka\kafka-pvc.yaml
+```
+
+```
+
+### FILE: _auto_fix_backup_20260128_065718\k8s\kafka\kafka.yaml
+```
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: dev
+spec:
+  serviceName: kafka
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+        - name: kafka
+          image: confluentinc/cp-kafka:7.5.0
+
+          ports:
+            - containerPort: 9092
+            - containerPort: 9093
+
+          env:
+            - name: KAFKA_PROCESS_ROLES
+              value: "broker,controller"
+
+            - name: KAFKA_NODE_ID
+              value: "1"
+
+            - name: CLUSTER_ID
+              value: "cICOmzzYSGur9Qz-qJTksA"
+
+            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+              value: "1@kafka-0.kafka.dev.svc.cluster.local:9093"
+
+            - name: KAFKA_LISTENERS
+              value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
+
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: "PLAINTEXT://kafka-0.kafka.dev.svc.cluster.local:9092"
+
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+
+            - name: KAFKA_LOG_DIRS
+              value: "/var/lib/kafka/data"
+
+            # ============================================
+            # CRITICAL FIX: Set replication factor to 1
+            # (Required for single-broker setup)
+            # ============================================
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+
+            - name: KAFKA_DEFAULT_REPLICATION_FACTOR
+              value: "1"
+
+            - name: KAFKA_MIN_INSYNC_REPLICAS
+              value: "1"
+
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /var/lib/kafka/data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: kafka-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi
 ```
 
 ### DIRECTORY: _backup_20260125_103444/

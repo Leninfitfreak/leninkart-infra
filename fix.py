@@ -1,138 +1,500 @@
 #!/usr/bin/env python3
 """
-LeninKart One-Shot Fix Script
-============================
-Fixes:
-- Deletes empty kafka-pvc.yaml
-- Fixes Kafka StatefulSet PVC storageClass
-- Removes merge conflict markers from order-service
-- Creates backups before changes
+LeninKart Full Observability - FINAL VERSION FOR WINDOWS POWERSHELL
+===================================================================
+Paths from your screenshots:
+- Services: C:\\Projects\\Services
+- Infra: C:\\Projects\\infra\\leninkart-infra
 
-SAFE FOR GITOPS + ARGOCD
+This version:
+- Uses PowerShell commands
+- Correct paths from your VS Code screenshots
+- Creates observability stack in infra repo
+- Adds OTel config to Helm values (appends if not exists)
 """
 
 import os
-import shutil
-import re
-from datetime import datetime
+import sys
+import subprocess
+from pathlib import Path
 
-ROOT = os.getcwd()
-BACKUP_DIR = f"_auto_fix_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+# ============================================
+# CONFIGURATION FROM YOUR SCREENSHOTS
+# ============================================
 
-FILES_TO_FIX = [
-    "k8s/kafka/kafka.yaml",
-    "helm/order-service/values-dev.yaml",
-]
+INFRA_REPO = Path(r"C:\Projects\infra\leninkart-infra")
+NAMESPACE = "dev"
+GIT_BRANCH = "dev"
+OTEL_VERSION = "0.92.0"
+JAEGER_VERSION = "1.53"
+PROMETHEUS_VERSION = "v2.48.1"
+GRAFANA_VERSION = "10.2.3"
+OTEL_AGENT_VERSION = "1.32.0"
+
+# ============================================
+# Helpers
+# ============================================
 
 def log(msg):
-    print(f"[FIX] {msg}")
+    print(f"[OBSERVABILITY] {msg}")
 
-def backup(path):
-    os.makedirs(BACKUP_DIR, exist_ok=True)
-    target = os.path.join(BACKUP_DIR, path)
-    os.makedirs(os.path.dirname(target), exist_ok=True)
-    shutil.copy2(path, target)
-    log(f"Backup created: {target}")
+def write_file(path, content):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
+        f.write(content)
+    log(f"✓ {path}")
 
-# ------------------------------------------------
-# 1. DELETE EMPTY kafka-pvc.yaml
-# ------------------------------------------------
-def fix_kafka_pvc_file():
-    pvc_file = "k8s/kafka/kafka-pvc.yaml"
-    if os.path.exists(pvc_file):
-        if os.path.getsize(pvc_file) == 0:
-            backup(pvc_file)
-            os.remove(pvc_file)
-            log("Deleted empty kafka-pvc.yaml (correct for StatefulSet)")
-        else:
-            log("kafka-pvc.yaml exists but is not empty – review manually")
+# ============================================
+# Create Manifests
+# ============================================
+
+log("=" * 70)
+log("Creating Observability Stack")
+log("=" * 70)
+
+# 1. OTel Collector
+log("\n1. OpenTelemetry Collector...")
+otel_dir = INFRA_REPO / "k8s" / "otel"
+
+write_file(otel_dir / "01-configmap.yaml", f"""apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: {NAMESPACE}
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+      zipkin:
+        endpoint: 0.0.0.0:9411
+    processors:
+      batch: {{}}
+      memory_limiter:
+        limit_mib: 512
+    exporters:
+      otlp/jaeger:
+        endpoint: jaeger-collector:4317
+        tls:
+          insecure: true
+      prometheus:
+        endpoint: 0.0.0.0:8889
+      logging: {{}}
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp, zipkin]
+          processors: [batch]
+          exporters: [otlp/jaeger, logging]
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [prometheus]
+""")
+
+write_file(otel_dir / "02-deployment.yaml", f"""apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: {NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:{OTEL_VERSION}
+          args: ["--config=/conf/config.yaml"]
+          ports:
+            - containerPort: 4317
+            - containerPort: 4318
+            - containerPort: 9411
+            - containerPort: 8889
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: {NAMESPACE}
+spec:
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+    - name: otlp-http
+      port: 4318
+    - name: zipkin
+      port: 9411
+    - name: metrics
+      port: 8889
+""")
+
+# 2. Jaeger
+log("2. Jaeger...")
+jaeger_dir = INFRA_REPO / "k8s" / "jaeger"
+
+write_file(jaeger_dir / "jaeger.yaml", f"""apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: {NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: jaeger
+          image: jaegertracing/all-in-one:{JAEGER_VERSION}
+          env:
+            - name: COLLECTOR_OTLP_ENABLED
+              value: "true"
+          ports:
+            - containerPort: 4317
+            - containerPort: 16686
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-collector
+  namespace: {NAMESPACE}
+spec:
+  selector:
+    app: jaeger
+  ports:
+    - name: otlp
+      port: 4317
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-query
+  namespace: {NAMESPACE}
+spec:
+  selector:
+    app: jaeger
+  ports:
+    - name: ui
+      port: 16686
+""")
+
+# 3. Prometheus
+log("3. Prometheus...")
+prom_dir = INFRA_REPO / "k8s" / "prometheus"
+
+write_file(prom_dir / "prometheus.yaml", f"""apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: {NAMESPACE}
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      - job_name: otel
+        static_configs:
+          - targets: [otel-collector:8889]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: {NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:{PROMETHEUS_VERSION}
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: {NAMESPACE}
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - port: 9090
+""")
+
+# 4. Grafana
+log("4. Grafana...")
+grafana_dir = INFRA_REPO / "k8s" / "grafana"
+
+write_file(grafana_dir / "grafana.yaml", f"""apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: {NAMESPACE}
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus:9090
+        isDefault: true
+      - name: Jaeger
+        type: jaeger
+        url: http://jaeger-query:16686
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: {NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:{GRAFANA_VERSION}
+          ports:
+            - containerPort: 3000
+          env:
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: "Admin"
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: {NAMESPACE}
+spec:
+  selector:
+    app: grafana
+  ports:
+    - port: 3000
+""")
+
+# 5. Istio
+log("5. Istio Gateway & VirtualService...")
+istio_dir = INFRA_REPO / "k8s" / "istio"
+
+write_file(istio_dir / "gateway.yaml", f"""apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: leninkart-gateway
+  namespace: {NAMESPACE}
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*"
+""")
+
+write_file(istio_dir / "virtualservice.yaml", f"""apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: leninkart-routes
+  namespace: {NAMESPACE}
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - leninkart-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /api/products
+      route:
+        - destination:
+            host: leninkart-product-service
+            port:
+              number: 8081
+    - match:
+        - uri:
+            prefix: /api/orders
+      route:
+        - destination:
+            host: leninkart-order-service
+            port:
+              number: 8080
+    - match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: leninkart-frontend
+            port:
+              number: 80
+""")
+
+write_file(istio_dir / "telemetry.yaml", f"""apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: leninkart-telemetry
+  namespace: {NAMESPACE}
+spec:
+  tracing:
+    - providers:
+        - name: zipkin
+      randomSamplingPercentage: 100.0
+""")
+
+# 6. ArgoCD Apps
+log("6. ArgoCD Applications...")
+argocd_dir = INFRA_REPO / "argocd" / "applications" / NAMESPACE
+
+for app_name, path in [
+    ("otel-collector", "k8s/otel"),
+    ("jaeger", "k8s/jaeger"),
+    ("prometheus", "k8s/prometheus"),
+    ("grafana", "k8s/grafana"),
+    ("istio-config", "k8s/istio"),
+]:
+    write_file(argocd_dir / f"{app_name}.yaml", f"""apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {app_name}-{NAMESPACE}
+  namespace: argocd
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: {GIT_BRANCH}
+    path: {path}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {NAMESPACE}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+""")
+
+# 7. Add OTel to Helm values (if they exist)
+log("\n7. Updating Helm values...")
+
+for service, port in [("product-service", "8081"), ("order-service", "8080")]:
+    values_file = INFRA_REPO / "helm" / service / "values-dev.yaml"
+    if values_file.exists():
+        with open(values_file, 'r') as f:
+            content = f.read()
+        
+        if "otel:" not in content:
+            with open(values_file, 'a', newline='\n') as f:
+                f.write(f"""
+
+# ============================================
+# OPENTELEMETRY CONFIGURATION
+# ============================================
+otel:
+  enabled: true
+  javaAgent:
+    version: "{OTEL_AGENT_VERSION}"
+  serviceName: "{service}"
+  endpoint: "http://otel-collector:4318"
+
+annotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "{port}"
+""")
+            log(f"✓ Updated Helm values: {service}")
     else:
-        log("kafka-pvc.yaml not present (OK)")
+        log(f"⚠️  Helm values not found: {service}")
 
-# ------------------------------------------------
-# 2. FIX KAFKA STATEFULSET STORAGECLASS
-# ------------------------------------------------
-def fix_kafka_statefulset():
-    path = "k8s/kafka/kafka.yaml"
-    if not os.path.exists(path):
-        log("Kafka StatefulSet not found, skipping")
-        return
+# Done
+log("\n" + "=" * 70)
+log("✓ COMPLETED!")
+log("=" * 70)
 
-    with open(path, "r") as f:
-        content = f.read()
+print(f"""
+NEXT STEPS:
 
-    if "storageClassName:" in content:
-        log("Kafka StatefulSet already has storageClassName")
-        return
+1. Review changes:
+   cd {INFRA_REPO}
+   git status
 
-    backup(path)
+2. Commit & push:
+   git add .
+   git commit -m "feat: add observability stack"
+   git push origin {GIT_BRANCH}
 
-    fixed = re.sub(
-        r"(volumeClaimTemplates:\s*-\s*metadata:\s*name:\s*kafka-data\s*spec:\s*accessModes:\s*-\s*ReadWriteOnce)",
-        r"\1\n        storageClassName: standard",
-        content,
-        flags=re.MULTILINE
-    )
+3. Install Istio (if not done):
+   # Download: https://github.com/istio/istio/releases/download/1.20.2/istio-1.20.2-win.zip
+   istioctl install --set profile=demo -y
+   kubectl label namespace {NAMESPACE} istio-injection=enabled --overwrite
 
-    with open(path, "w") as f:
-        f.write(fixed)
+4. Wait for ArgoCD sync (5 min):
+   kubectl get pods -n {NAMESPACE} -w
 
-    log("Added storageClassName: standard to Kafka StatefulSet")
+5. Access tools:
+   kubectl port-forward -n {NAMESPACE} svc/jaeger-query 16686:16686
+   kubectl port-forward -n {NAMESPACE} svc/grafana 3000:3000
 
-# ------------------------------------------------
-# 3. REMOVE MERGE CONFLICTS (ORDER-SERVICE)
-# ------------------------------------------------
-def fix_merge_conflicts():
-    path = "helm/order-service/values-dev.yaml"
-    if not os.path.exists(path):
-        log("order-service values-dev.yaml not found")
-        return
-
-    with open(path, "r") as f:
-        lines = f.readlines()
-
-    if not any(line.startswith("<<<<<<<") for line in lines):
-        log("No merge conflicts found in order-service")
-        return
-
-    backup(path)
-
-    cleaned = []
-    skip = False
-
-    for line in lines:
-        if line.startswith("<<<<<<<"):
-            skip = True
-            continue
-        if line.startswith("======="):
-            continue
-        if line.startswith(">>>>>>>"):
-            skip = False
-            continue
-        if not skip:
-            cleaned.append(line)
-
-    with open(path, "w") as f:
-        f.writelines(cleaned)
-
-    log("Removed merge conflict markers from order-service values")
-
-# ------------------------------------------------
-# MAIN
-# ------------------------------------------------
-def main():
-    print("\n=== LENINKART AUTO FIX STARTED ===\n")
-    fix_kafka_pvc_file()
-    fix_kafka_statefulset()
-    fix_merge_conflicts()
-    print(f"\n✔ Fix complete. Backup folder: {BACKUP_DIR}\n")
-    print("NEXT STEPS:")
-    print("  git status")
-    print("  git diff")
-    print("  git add .")
-    print("  git commit -m \"fix: kafka pvc, storageclass, merge conflicts\"")
-    print("  git push origin dev")
-    print("\nArgoCD will auto-sync 🚀\n")
-
-if __name__ == "__main__":
-    main()
+6. Test & view traces:
+   minikube tunnel
+   curl http://$(kubectl get svc -n istio-system istio-ingressgateway -o jsonpath='{{.status.loadBalancer.ingress[0].ip}}')/api/products
+""")

@@ -1,0 +1,203 @@
+warning: in the working copy of 'helm/order-service/values-dev.yaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'helm/product-service/values-dev.yaml', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/fix.py b/fix.py[m
+[1mindex a140743..d5cdfd4 100644[m
+[1m--- a/fix.py[m
+[1m+++ b/fix.py[m
+[36m@@ -1,138 +1,500 @@[m
+ #!/usr/bin/env python3[m
+ """[m
+[31m-LeninKart One-Shot Fix Script[m
+[31m-============================[m
+[31m-Fixes:[m
+[31m-- Deletes empty kafka-pvc.yaml[m
+[31m-- Fixes Kafka StatefulSet PVC storageClass[m
+[31m-- Removes merge conflict markers from order-service[m
+[31m-- Creates backups before changes[m
+[31m-[m
+[31m-SAFE FOR GITOPS + ARGOCD[m
+[32m+[m[32mLeninKart Full Observability - FINAL VERSION FOR WINDOWS POWERSHELL[m
+[32m+[m[32m===================================================================[m
+[32m+[m[32mPaths from your screenshots:[m
+[32m+[m[32m- Services: C:\\Projects\\Services[m
+[32m+[m[32m- Infra: C:\\Projects\\infra\\leninkart-infra[m
+[32m+[m
+[32m+[m[32mThis version:[m
+[32m+[m[32m- Uses PowerShell commands[m
+[32m+[m[32m- Correct paths from your VS Code screenshots[m
+[32m+[m[32m- Creates observability stack in infra repo[m
+[32m+[m[32m- Adds OTel config to Helm values (appends if not exists)[m
+ """[m
+ [m
+ import os[m
+[31m-import shutil[m
+[31m-import re[m
+[31m-from datetime import datetime[m
+[32m+[m[32mimport sys[m
+[32m+[m[32mimport subprocess[m
+[32m+[m[32mfrom pathlib import Path[m
+[32m+[m
+[32m+[m[32m# ============================================[m
+[32m+[m[32m# CONFIGURATION FROM YOUR SCREENSHOTS[m
+[32m+[m[32m# ============================================[m
+ [m
+[31m-ROOT = os.getcwd()[m
+[31m-BACKUP_DIR = f"_auto_fix_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"[m
+[32m+[m[32mINFRA_REPO = Path(r"C:\Projects\infra\leninkart-infra")[m
+[32m+[m[32mNAMESPACE = "dev"[m
+[32m+[m[32mGIT_BRANCH = "dev"[m
+[32m+[m[32mOTEL_VERSION = "0.92.0"[m
+[32m+[m[32mJAEGER_VERSION = "1.53"[m
+[32m+[m[32mPROMETHEUS_VERSION = "v2.48.1"[m
+[32m+[m[32mGRAFANA_VERSION = "10.2.3"[m
+[32m+[m[32mOTEL_AGENT_VERSION = "1.32.0"[m
+ [m
+[31m-FILES_TO_FIX = [[m
+[31m-    "k8s/kafka/kafka.yaml",[m
+[31m-    "helm/order-service/values-dev.yaml",[m
+[31m-][m
+[32m+[m[32m# ============================================[m
+[32m+[m[32m# Helpers[m
+[32m+[m[32m# ============================================[m
+ [m
+ def log(msg):[m
+[31m-    print(f"[FIX] {msg}")[m
+[31m-[m
+[31m-def backup(path):[m
+[31m-    os.makedirs(BACKUP_DIR, exist_ok=True)[m
+[31m-    target = os.path.join(BACKUP_DIR, path)[m
+[31m-    os.makedirs(os.path.dirname(target), exist_ok=True)[m
+[31m-    shutil.copy2(path, target)[m
+[31m-    log(f"Backup created: {target}")[m
+[31m-[m
+[31m-# ------------------------------------------------[m
+[31m-# 1. DELETE EMPTY kafka-pvc.yaml[m
+[31m-# ------------------------------------------------[m
+[31m-def fix_kafka_pvc_file():[m
+[31m-    pvc_file = "k8s/kafka/kafka-pvc.yaml"[m
+[31m-    if os.path.exists(pvc_file):[m
+[31m-        if os.path.getsize(pvc_file) == 0:[m
+[31m-            backup(pvc_file)[m
+[31m-            os.remove(pvc_file)[m
+[31m-            log("Deleted empty kafka-pvc.yaml (correct for StatefulSet)")[m
+[31m-        else:[m
+[31m-            log("kafka-pvc.yaml exists but is not empty – review manually")[m
+[32m+[m[32m    print(f"[OBSERVABILITY] {msg}")[m
+[32m+[m
+[32m+[m[32mdef write_file(path, content):[m
+[32m+[m[32m    path.parent.mkdir(parents=True, exist_ok=True)[m
+[32m+[m[32m    with open(path, 'w', encoding='utf-8', newline='\n') as f:[m
+[32m+[m[32m        f.write(content)[m
+[32m+[m[32m    log(f"✓ {path}")[m
+[32m+[m
+[32m+[m[32m# ============================================[m
+[32m+[m[32m# Create Manifests[m
+[32m+[m[32m# ============================================[m
+[32m+[m
+[32m+[m[32mlog("=" * 70)[m
+[32m+[m[32mlog("Creating Observability Stack")[m
+[32m+[m[32mlog("=" * 70)[m
+[32m+[m
+[32m+[m[32m# 1. OTel Collector[m
+[32m+[m[32mlog("\n1. OpenTelemetry Collector...")[m
+[32m+[m[32motel_dir = INFRA_REPO / "k8s" / "otel"[m
+[32m+[m
+[32m+[m[32mwrite_file(otel_dir / "01-configmap.yaml", f"""apiVersion: v1[m
+[32m+[m[32mkind: ConfigMap[m
+[32m+[m[32mmetadata:[m
+[32m+[m[32m  name: otel-collector-config[m
+[32m+[m[32m  namespace: {NAMESPACE}[m
+[32m+[m[32mdata:[m
+[32m+[m[32m  config.yaml: |[m
+[32m+[m[32m    receivers:[m
+[32m+[m[32m      otlp:[m
+[32m+[m[32m        protocols:[m
+[32m+[m[32m          grpc:[m
+[32m+[m[32m            endpoint: 0.0.0.0:4317[m
+[32m+[m[32m          http:[m
+[32m+[m[32m            endpoint: 0.0.0.0:4318[m
+[32m+[m[32m      zipkin:[m
+[32m+[m[32m        endpoint: 0.0.0.0:9411[m
+[32m+[m[32m    processors:[m
+[32m+[m[32m      batch: {{}}[m
+[32m+[m[32m      memory_limiter:[m
+[32m+[m[32m        limit_mib: 512[m
+[32m+[m[32m    exporters:[m
+[32m+[m[32m      otlp/jaeger:[m
+[32m+[m[32m        endpoint: jaeger-collector:4317[m
+[32m+[m[32m        tls:[m
+[32m+[m[32m          insecure: true[m
+[32m+[m[32m      prometheus:[m
+[32m+[m[32m        endpoint: 0.0.0.0:8889[m
+[32m+[m[32m      logging: {{}}[m
+[32m+[m[32m    service:[m
+[32m+[m[32m      pipelines:[m
+[32m+[m[32m        traces:[m
+[32m+[m[32m          receivers: [otlp, zipkin][m
+[32m+[m[32m          processors: [batch][m
+[32m+[m[32m          exporters: [otlp/jaeger, logging][m
+[32m+[m[32m        metrics:[m
+[32m+[m[32m          receivers: [otlp][m
+[32m+[m[32m          processors: [batch][m
+[32m+[m[32m          exporters: [prometheus][m
+[32m+[m[32m""")[m
+[32m+[m
+[32m+[m[32mwrite_file(otel_dir / "02-deployment.yaml", f"""apiVersion: apps/v1[m
+[32m+[m[32mkind: Deployment[m
+[32m+[m[32mmetadata:[m
+[32m+[m[32m  name: otel-collector[m
+[32m+[m[32m  namespace: {NAMESPACE}[m
+[32m+[m[32mspec:[m
+[32m+[m[32m  replicas: 1[m
+[32m+[m[32m  selector:[m
+[32m+[m[32m    matchLabels:[m
+[32m+[m[32m      app: otel-collector[m
+[32m+[m[32m  template:[m
+[32m+[m[32m    metadata:[m
+[32m+[m[32m      labels:[m
+[32m+[m[32m        app: otel-collector[m
+[32m+[m[32m      annotations:[m
+[32m+[m[32m        sidecar.istio.io/inject: "false"[m
+[32m+[m[32m    spec:[m
+[32m+[m[32m      containers:[m
+[32m+[m[32m        - name: otel-collector[m
+[32m+[m[32m          image: otel/opentelemetry-collector-contrib:{OTEL_VERSION}[m
+[32m+[m[32m          args: ["--config=/conf/config.yaml"][m
+[32m+[m[32m          ports:[m
+[32m+[m[32m            - containerPort: 4317[m
+[32m+[m[32m            - containerPort: 4318[m
+[32m+[m[32m            - containerPort: 9411[m
+[32m+[m[32m            - containerPort: 8889[m
+[32m+[m[32m          volumeMounts:[m
+[32m+[m[32m            - name: config[m
+[32m+[m[32m              mountPath: /conf[m
+[32m+[m[32m      volumes:[m
+[32m+[m[32m        - name: config[m
+[32m+[m[32m          configMap:[m
+[32m+[m[32m            name: otel-collector-config[m
+[32m+[m[32m---[m
+[32m+[m[32mapiVersion: v1[m
+[32m+[m[32mkind: Service[m
+[32m+[m[32mmetadata:[m
+[32m+[m[32m  name: otel-collector[m
+[32m+[m[32m  namespace: {NAMESPACE}[m
+[32m+[m[32mspec:[m
+[32m+[m[32m  selector:[m
+[32m+[m[32m    app: otel-collector[m
+[32m+[m[32m  ports:[m
+[32m+[m[32m    - name: otlp-grpc[m
+[32m+[m[32m      port: 4317[m
+[32m+[m[32m    - name: otlp-http[m
+[32m+[m[32m      port: 4318[m
+[32m+[m[32m    - name: zipkin[m
+[32m+[m[32m      port: 9411[m
+[32m+[m[32m    - name: metrics[m
+[32m+[m[32m      port: 8889[m
+[32m+[m[32m""")[m
+[32m+[m
+[32m+[m[32m# 2. Jaeger[m
+[32m+[m[32mlog("2. Jaeger...")[m
+[32m+[m[32mjaeger_dir = INFRA_REPO / "k8s" / "jaeger"[m
+[32m+[m
+[32m+[m[32mwrite_file(jaeger_dir / "jaeger.yaml", f"""apiVersion: apps/v1[m
+[32m+[m[32mkind: Deployment
