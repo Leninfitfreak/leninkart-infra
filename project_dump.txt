@@ -496,303 +496,54 @@ warning: in the working copy of 'helm/product-service/values-dev.yaml', LF will 
 ```
 #!/usr/bin/env python3
 """
-Complete Vault Reset - Aggressive Fix
-======================================
-Completely removes and recreates Vault to fix port conflict
+Fix ExternalSecrets to use ClusterSecretStore
+============================================
+
+- Finds all ExternalSecret YAMLs
+- Forces secretStoreRef.kind = ClusterSecretStore
+- Safe for GitOps (no kubectl calls)
 """
 
-import subprocess
-import time
+import yaml
 from pathlib import Path
 
-INFRA_REPO = Path(r"C:\Projects\infra\leninkart-infra")
+ROOT = Path("k8s")  # change if needed
+FIXED = 0
 
-def run(cmd, wait=True):
-    print(f"Running: {cmd}")
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    if result.stdout:
-        print(result.stdout)
-    if result.returncode != 0 and result.stderr:
-        print(f"Note: {result.stderr}")
-    if wait:
-        time.sleep(2)
-    return result.returncode == 0
+def fix_file(path: Path):
+    global FIXED
+    with open(path, "r") as f:
+        docs = list(yaml.safe_load_all(f))
 
-def write_file(path, content):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, 'w', encoding='utf-8', newline='\n') as f:
-        f.write(content)
-    print(f"✓ Created: {path.name}")
+    changed = False
 
-print("=" * 70)
-print("VAULT COMPLETE RESET - AGGRESSIVE FIX")
-print("=" * 70)
-print("\nThis will completely remove and recreate Vault with proper configuration.")
-print("Any existing Vault data will be lost (which is fine, it's not initialized yet).\n")
+    for doc in docs:
+        if not doc:
+            continue
 
-response = input("Proceed? (y/n): ")
-if response.lower() != 'y':
-    print("Cancelled")
-    exit(0)
+        if doc.get("kind") == "ExternalSecret":
+            ref = doc.setdefault("spec", {}).setdefault("secretStoreRef", {})
+            if ref.get("kind") != "ClusterSecretStore":
+                ref["kind"] = "ClusterSecretStore"
+                changed = True
 
-# ============================================
-# Step 1: Complete cleanup
-# ============================================
-print("\n[1/6] Removing all Vault resources...")
+    if changed:
+        with open(path, "w") as f:
+            yaml.safe_dump_all(docs, f, sort_keys=False)
+        print(f"✔ Fixed: {path}")
+        FIXED += 1
 
-run("kubectl delete sts vault -n vault --grace-period=0 --force")
-run("kubectl delete pod vault-0 -n vault --grace-period=0 --force")
-run("kubectl delete pvc --all -n vault")
-run("kubectl delete configmap vault-config -n vault")
-run("kubectl delete service vault vault-ui -n vault")
 
-print("\nWaiting 10 seconds for cleanup...")
-time.sleep(10)
+for file in ROOT.rglob("*.yaml"):
+    try:
+        fix_file(file)
+    except Exception:
+        pass
 
-# ============================================
-# Step 2: Create simplified Vault config
-# ============================================
-print("\n[2/6] Creating simplified Vault configuration...")
-
-vault_dir = INFRA_REPO / "k8s" / "vault"
-
-# Simple ConfigMap without conflicts
-configmap = """apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: vault-config
-  namespace: vault
-data:
-  vault-config.hcl: |
-    ui = true
-    disable_mlock = true
-    
-    storage "file" {
-      path = "/vault/data"
-    }
-    
-    listener "tcp" {
-      address     = "[::]:8200"
-      tls_disable = 1
-    }
-"""
-
-write_file(vault_dir / "02-configmap.yaml", configmap)
-
-# Simplified StatefulSet - No health probes initially
-statefulset = """apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: vault
-  namespace: vault
-spec:
-  serviceName: vault
-  replicas: 1
-  selector:
-    matchLabels:
-      app: vault
-  template:
-    metadata:
-      labels:
-        app: vault
-    spec:
-      serviceAccountName: vault
-      containers:
-        - name: vault
-          image: hashicorp/vault:1.15.4
-          command: ["vault", "server", "-config=/vault/config/vault-config.hcl"]
-          env:
-            - name: VAULT_ADDR
-              value: "http://127.0.0.1:8200"
-            - name: SKIP_SETCAP
-              value: "true"
-          ports:
-            - name: http
-              containerPort: 8200
-            - name: https-internal
-              containerPort: 8201
-          volumeMounts:
-            - name: data
-              mountPath: /vault/data
-            - name: config
-              mountPath: /vault/config
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 500m
-              memory: 256Mi
-      volumes:
-        - name: config
-          configMap:
-            name: vault-config
-  volumeClaimTemplates:
-    - metadata:
-        name: data
-      spec:
-        accessModes: ["ReadWriteOnce"]
-        resources:
-          requests:
-            storage: 1Gi
-"""
-
-write_file(vault_dir / "03-statefulset.yaml", statefulset)
-
-# Service
-service = """apiVersion: v1
-kind: Service
-metadata:
-  name: vault
-  namespace: vault
-spec:
-  selector:
-    app: vault
-  ports:
-    - name: http
-      port: 8200
-      targetPort: 8200
-    - name: https-internal
-      port: 8201
-      targetPort: 8201
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: vault-ui
-  namespace: vault
-spec:
-  selector:
-    app: vault
-  ports:
-    - name: http
-      port: 8200
-      targetPort: 8200
-"""
-
-write_file(vault_dir / "04-service.yaml", service)
-
-# ============================================
-# Step 3: Apply configuration
-# ============================================
-print("\n[3/6] Applying new configuration...")
-
-run("kubectl apply -f " + str(vault_dir / "02-configmap.yaml"))
-run("kubectl apply -f " + str(vault_dir / "03-statefulset.yaml"))
-run("kubectl apply -f " + str(vault_dir / "04-service.yaml"))
-
-# ============================================
-# Step 4: Wait for pod to start
-# ============================================
-print("\n[4/6] Waiting for Vault pod to start (30 seconds)...")
-
-for i in range(30):
-    result = subprocess.run(
-        "kubectl get pod vault-0 -n vault -o jsonpath='{.status.phase}'",
-        shell=True,
-        capture_output=True,
-        text=True
-    )
-    
-    if result.stdout.strip() == 'Running':
-        print(f"\n✓ Vault pod is Running!")
-        break
-    
-    print(f"  Waiting... ({i+1}/30) Status: {result.stdout.strip()}")
-    time.sleep(1)
-
-# ============================================
-# Step 5: Check status
-# ============================================
-print("\n[5/6] Checking Vault status...")
-
-run("kubectl get pods -n vault", wait=False)
-run("kubectl get svc -n vault", wait=False)
-
-print("\nChecking Vault logs (last 20 lines):")
-run("kubectl logs vault-0 -n vault --tail=20", wait=False)
-
-# ============================================
-# Step 6: Test Vault
-# ============================================
-print("\n[6/6] Testing Vault connectivity...")
-
-# Try to check status from inside the pod
-test_result = subprocess.run(
-    "kubectl exec vault-0 -n vault -- vault status",
-    shell=True,
-    capture_output=True,
-    text=True
-)
-
-if "Initialized" in test_result.stdout:
-    print("✓ Vault is responding!")
-    print(test_result.stdout)
-else:
-    print("Note: Vault may still be starting...")
-    print(test_result.stdout if test_result.stdout else test_result.stderr)
-
-print("\n" + "=" * 70)
-print("VAULT RESET COMPLETE")
-print("=" * 70)
-
-print("""
-STATUS CHECK:
-
-1. Pod Status:
-   kubectl get pods -n vault
-   
-   Should show: vault-0   1/1   Running
-
-2. Logs (should be clean):
-   kubectl logs vault-0 -n vault
-   
-   Should show: "Vault server started!" with no errors
-
-3. If logs still show port error:
-   kubectl describe pod vault-0 -n vault
-   kubectl get events -n vault --sort-by='.lastTimestamp'
-
-NEXT STEPS (If Running):
-
-1. Initialize Vault:
-   kubectl port-forward -n vault svc/vault 8200:8200
-   
-   In another terminal:
-   $env:VAULT_ADDR='http://127.0.0.1:8200'
-   vault operator init -key-shares=1 -key-threshold=1
-   
-   SAVE THE OUTPUT!
-
-2. Unseal Vault:
-   vault operator unseal <UNSEAL_KEY>
-
-3. Login:
-   vault login <ROOT_TOKEN>
-
-4. Configure:
-   vault secrets enable -version=2 -path=secret kv
-   vault auth enable kubernetes
-
-IF STILL FAILING:
-
-The issue might be with the PVC or a lingering process.
-
-Complete nuclear option:
-  kubectl delete namespace vault
-  kubectl create namespace vault
-  kubectl apply -f k8s/vault/00-namespace.yaml
-  kubectl apply -f k8s/vault/01-serviceaccount.yaml
-  kubectl apply -f k8s/vault/
-
-ALTERNATIVE: Skip Vault for now
-  python remove_vault_restore_normal.py
-
-Your choice - Vault is valuable but optional for dev environment.
-""")
-
-print("\nCurrent status:")
-run("kubectl get all -n vault", wait=False)
+print("\n===================================")
+print(f"Done. Files fixed: {FIXED}")
+print("Commit & push, then ArgoCD will sync.")
+print("===================================")
 ```
 
 ### FILE: helm_order-service_values-dev.yaml
@@ -4843,7 +4594,6 @@ apiVersion: external-secrets.io/v1beta1
 kind: ClusterSecretStore
 metadata:
   name: vault-backend
-  namespace: dev
 spec:
   provider:
     vault:
@@ -4854,9 +4604,6 @@ spec:
         kubernetes:
           mountPath: kubernetes
           role: leninkart-role
-          serviceAccountRef:
-            name: external-secrets
-            namespace: external-secrets-system
 ```
 
 ### DIRECTORY: k8s\external-secrets\applications/
@@ -4872,19 +4619,19 @@ spec:
   refreshInterval: 30m
   secretStoreRef:
     name: vault-backend
-    kind: SecretStore
+    kind: ClusterSecretStore
   target:
     name: product-service-config-secret
     creationPolicy: Owner
   data:
-    - secretKey: JWT_SECRET
-      remoteRef:
-        key: leninkart/product-service/config
-        property: jwt_secret
-    - secretKey: API_KEY
-      remoteRef:
-        key: leninkart/product-service/config
-        property: api_key
+  - secretKey: JWT_SECRET
+    remoteRef:
+      key: leninkart/product-service/config
+      property: jwt_secret
+  - secretKey: API_KEY
+    remoteRef:
+      key: leninkart/product-service/config
+      property: api_key
 ---
 apiVersion: external-secrets.io/v1beta1
 kind: ExternalSecret
@@ -4895,19 +4642,19 @@ spec:
   refreshInterval: 30m
   secretStoreRef:
     name: vault-backend
-    kind: SecretStore
+    kind: ClusterSecretStore
   target:
     name: order-service-config-secret
     creationPolicy: Owner
   data:
-    - secretKey: JWT_SECRET
-      remoteRef:
-        key: leninkart/order-service/config
-        property: jwt_secret
-    - secretKey: API_KEY
-      remoteRef:
-        key: leninkart/order-service/config
-        property: api_key
+  - secretKey: JWT_SECRET
+    remoteRef:
+      key: leninkart/order-service/config
+      property: jwt_secret
+  - secretKey: API_KEY
+    remoteRef:
+      key: leninkart/order-service/config
+      property: api_key
 ```
 
 ### FILE: k8s\external-secrets\applications\kafka-credentials.yaml
@@ -4921,20 +4668,17 @@ spec:
   refreshInterval: 1h
   secretStoreRef:
     name: vault-backend
-    kind: SecretStore
+    kind: ClusterSecretStore
   target:
     name: kafka-secret
     creationPolicy: Owner
     template:
       engineVersion: v2
       data:
-        KAFKA_BOOTSTRAP_SERVERS: "kafka-0.kafka.dev.svc.cluster.local:9092"
-        # Add SASL credentials when Kafka auth is enabled
-        # KAFKA_SASL_USERNAME: "{{ .username }}"
-        # KAFKA_SASL_PASSWORD: "{{ .password }}"
+        KAFKA_BOOTSTRAP_SERVERS: kafka-0.kafka.dev.svc.cluster.local:9092
   dataFrom:
-    - extract:
-        key: leninkart/kafka/credentials
+  - extract:
+      key: leninkart/kafka/credentials
 ```
 
 ### FILE: k8s\external-secrets\applications\order-service-db-secret.yaml
@@ -4948,19 +4692,19 @@ spec:
   refreshInterval: 1h
   secretStoreRef:
     name: vault-backend
-    kind: SecretStore
+    kind: ClusterSecretStore
   target:
     name: order-service-db-secret
     creationPolicy: Owner
     template:
       engineVersion: v2
       data:
-        SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart"
-        SPRING_DATASOURCE_USERNAME: "{{ .username }}"
-        SPRING_DATASOURCE_PASSWORD: "{{ .password }}"
+        SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
+        SPRING_DATASOURCE_USERNAME: '{{ .username }}'
+        SPRING_DATASOURCE_PASSWORD: '{{ .password }}'
   dataFrom:
-    - extract:
-        key: leninkart/order-service/database
+  - extract:
+      key: leninkart/order-service/database
 ```
 
 ### FILE: k8s\external-secrets\applications\product-service-db-secret.yaml
@@ -4974,24 +4718,21 @@ spec:
   refreshInterval: 1h
   secretStoreRef:
     name: vault-backend
-    kind: SecretStore
+    kind: ClusterSecretStore
   target:
     name: product-service-db-secret
     creationPolicy: Owner
     template:
       engineVersion: v2
       data:
-        SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart"
-        SPRING_DATASOURCE_USERNAME: "{{ .username }}"
-        SPRING_DATASOURCE_PASSWORD: "{{ .password }}"
+        SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
+        SPRING_DATASOURCE_USERNAME: '{{ .username }}'
+        SPRING_DATASOURCE_PASSWORD: '{{ .password }}'
   dataFrom:
-    - extract:
-        key: leninkart/product-service/database
----
-# Static secret stored in Vault (for reference)
-# kubectl exec -n vault vault-0 -- vault kv put secret/leninkart/product-service/database \
-#   username=product_user \
-#   password=secure_password_here
+  - extract:
+      key: leninkart/product-service/database
+--- null
+...
 ```
 
 ### DIRECTORY: k8s\grafana/
