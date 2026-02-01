@@ -17,12 +17,22 @@ spec:
         app: vault
     spec:
       serviceAccountName: vault
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        fsGroup: 100
       containers:
         - name: vault
           image: hashicorp/vault:1.15.4
+          command:
+            - /bin/sh
+            - -c
           args:
-            - "server"
-            - "-config=/vault/config/vault-config.hcl"
+            - |
+              # Wait a bit to ensure clean startup
+              sleep 2
+              # Start Vault server
+              vault server -config=/vault/config/vault-config.hcl
           env:
             - name: VAULT_ADDR
               value: "http://127.0.0.1:8200"
@@ -32,6 +42,8 @@ spec:
               value: "true"
             - name: SKIP_SETCAP
               value: "true"
+            - name: VAULT_LOG_LEVEL
+              value: "info"
           ports:
             - name: http
               containerPort: 8200
@@ -51,18 +63,25 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          # Simplified probes - only check after longer delay
           livenessProbe:
             httpGet:
-              path: /v1/sys/health?standbyok=true
+              path: /v1/sys/health
               port: 8200
-            initialDelaySeconds: 30
-            periodSeconds: 10
+              scheme: HTTP
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /v1/sys/health?standbyok=true&uninitcode=204
+              path: /v1/sys/health
               port: 8200
-            initialDelaySeconds: 10
-            periodSeconds: 5
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
       volumes:
         - name: config
           configMap:

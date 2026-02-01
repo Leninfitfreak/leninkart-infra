@@ -492,6 +492,799 @@ warning: in the working copy of 'helm/product-service/values-dev.yaml', LF will 
 [32m+[m[32mkind: Deployment
 ```
 
+### FILE: fix.py
+```
+#!/usr/bin/env python3
+"""
+ArgoCD-Native Vault Stack Deployment
+=====================================
+Creates all necessary ArgoCD applications and syncs them properly
+"""
+
+from pathlib import Path
+import subprocess
+import time
+
+INFRA_REPO = Path(r"C:\Projects\infra\leninkart-infra")
+
+def log(msg):
+    print(f"[ARGOCD] {msg}")
+
+def write_file(path, content):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
+        f.write(content)
+    log(f"✓ Created: {path}")
+
+def run_cmd(cmd, check=False):
+    log(f"Running: {cmd}")
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.stdout:
+        print(result.stdout)
+    return result.returncode == 0
+
+log("=" * 70)
+log("Creating ArgoCD Applications for Vault Stack")
+log("=" * 70)
+
+# ============================================
+# 1. Update ArgoCD Root Application
+# ============================================
+
+log("\n1. Updating root application to include Vault apps...")
+
+root_app_file = INFRA_REPO / "argocd" / "leninkart-root.yaml"
+
+root_app = """apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: leninkart-root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: argocd/applications/dev
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+"""
+
+write_file(root_app_file, root_app)
+
+# ============================================
+# 2. Create External Secrets Operator App
+# ============================================
+
+log("\n2. Creating External Secrets Operator application...")
+
+eso_app_file = INFRA_REPO / "argocd" / "applications" / "dev" / "external-secrets-operator.yaml"
+
+eso_app = """apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-secrets-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"  # Deploy first
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: leninkart
+  source:
+    repoURL: https://charts.external-secrets.io
+    chart: external-secrets
+    targetRevision: 0.9.11
+    helm:
+      releaseName: external-secrets
+      values: |
+        installCRDs: true
+        replicaCount: 1
+        
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        
+        webhook:
+          create: true
+          port: 9443
+        
+        certController:
+          create: true
+        
+        # Enable Prometheus metrics
+        metrics:
+          service:
+            enabled: true
+            port: 8080
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: external-secrets-system
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jsonPointers:
+        - /spec/conversion/webhook/clientConfig/caBundle
+"""
+
+write_file(eso_app_file, eso_app)
+
+# ============================================
+# 3. Create Vault Application
+# ============================================
+
+log("\n3. Creating Vault application...")
+
+vault_app_file = INFRA_REPO / "argocd" / "applications" / "dev" / "vault.yaml"
+
+vault_app = """apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"  # Deploy after ESO
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: k8s/vault
+    directory:
+      recurse: true
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vault
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  # Health checks
+  ignoreDifferences:
+    - group: batch
+      kind: Job
+      jsonPointers:
+        - /spec/template/metadata/labels
+"""
+
+write_file(vault_app_file, vault_app)
+
+# ============================================
+# 4. Create SecretStore Application
+# ============================================
+
+log("\n4. Creating SecretStore application...")
+
+secretstore_app_file = INFRA_REPO / "argocd" / "applications" / "dev" / "vault-secretstore.yaml"
+
+secretstore_app = """apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault-secretstore
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"  # Deploy after Vault and ESO
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: k8s/external-secrets
+    directory:
+      recurse: true
+      exclude: "applications/*"  # Don't include app secrets yet
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+"""
+
+write_file(secretstore_app_file, secretstore_app)
+
+# ============================================
+# 5. Create ExternalSecrets Application (Disabled Initially)
+# ============================================
+
+log("\n5. Creating ExternalSecrets application (will enable after Vault init)...")
+
+externalsecrets_app_file = INFRA_REPO / "argocd" / "applications" / "dev" / "vault-externalsecrets.yaml"
+
+externalsecrets_app = """apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault-externalsecrets
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"  # Deploy last
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: k8s/external-secrets/applications
+    directory:
+      recurse: true
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  
+  syncPolicy:
+    # Manual sync initially - enable automated after Vault is initialized
+    automated:
+      prune: false
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+"""
+
+write_file(externalsecrets_app_file, externalsecrets_app)
+
+# ============================================
+# 6. Create Initialization Guide
+# ============================================
+
+log("\n6. Creating initialization guide...")
+
+init_guide_file = INFRA_REPO / "docs" / "VAULT_ARGOCD_INIT.md"
+
+init_guide = """# Vault ArgoCD Initialization Guide
+
+## Overview
+
+This guide explains how to initialize Vault after ArgoCD deployment.
+
+## Deployment Order (via sync-wave)
+
+ArgoCD will deploy in this order:
+1. **Wave 1**: External Secrets Operator (ESO)
+2. **Wave 2**: Vault StatefulSet
+3. **Wave 3**: SecretStore (connects dev namespace to Vault)
+4. **Wave 4**: ExternalSecrets (creates K8s secrets from Vault) - Manual sync initially
+
+## Step-by-Step Initialization
+
+### 1. Commit and Push Changes
+
+```powershell
+cd C:\\Projects\\infra\\leninkart-infra
+git add argocd/ k8s/
+git commit -m "feat: add ArgoCD apps for Vault stack"
+git push origin dev
+```
+
+### 2. Watch ArgoCD Deploy
+
+```powershell
+# Watch applications
+kubectl get applications -n argocd -w
+
+# Or in ArgoCD UI
+# http://localhost:8080 (if port-forwarded)
+```
+
+**Expected order:**
+- `external-secrets-operator` syncs first (wave 1)
+- `vault` syncs next (wave 2)
+- `vault-secretstore` syncs next (wave 3)
+- `vault-externalsecrets` appears but won't auto-sync (wave 4)
+
+### 3. Verify Pods are Running
+
+```powershell
+# Check ESO
+kubectl get pods -n external-secrets-system
+
+# Expected: external-secrets-xxx Running
+
+# Check Vault
+kubectl get pods -n vault
+
+# Expected: vault-0 Running (but sealed)
+```
+
+### 4. Initialize Vault (ONE-TIME)
+
+**Port-forward to Vault:**
+```powershell
+kubectl port-forward -n vault svc/vault 8200:8200
+```
+
+**In another PowerShell window:**
+```powershell
+# Set environment
+$env:VAULT_ADDR='http://127.0.0.1:8200'
+
+# Check status
+vault status
+# Should show: Initialized: false, Sealed: true
+
+# Initialize Vault
+vault operator init -key-shares=1 -key-threshold=1 -format=json > vault-keys.json
+
+# Extract keys
+$vaultKeys = Get-Content vault-keys.json | ConvertFrom-Json
+$unsealKey = $vaultKeys.unseal_keys_b64[0]
+$rootToken = $vaultKeys.root_token
+
+Write-Host "Unseal Key: $unsealKey"
+Write-Host "Root Token: $rootToken"
+
+# SAVE THESE SECURELY!
+
+# Unseal Vault
+vault operator unseal $unsealKey
+
+# Login
+vault login $rootToken
+
+# Verify
+vault status
+# Should show: Initialized: true, Sealed: false
+```
+
+### 5. Configure Vault
+
+```powershell
+# Still in the PowerShell window with VAULT_ADDR set
+
+# Enable KV secrets engine
+vault secrets enable -version=2 -path=secret kv
+
+# Enable Kubernetes authentication
+vault auth enable kubernetes
+
+# Get Kubernetes config
+kubectl exec -n vault vault-0 -- sh -c 'cat /var/run/secrets/kubernetes.io/serviceaccount/token' > sa-token.txt
+kubectl exec -n vault vault-0 -- sh -c 'cat /var/run/secrets/kubernetes.io/serviceaccount/ca.crt' > ca.crt
+
+# Configure Kubernetes auth
+vault write auth/kubernetes/config `
+  kubernetes_host="https://kubernetes.default.svc:443" `
+  kubernetes_ca_cert=@ca.crt
+
+# Create policy
+vault policy write leninkart-policy - <<EOF
+path "secret/data/leninkart/*" {
+  capabilities = ["read", "list"]
+}
+path "secret/metadata/leninkart/*" {
+  capabilities = ["read", "list"]
+}
+EOF
+
+# Create Kubernetes role
+vault write auth/kubernetes/role/leninkart-role `
+  bound_service_account_names=vault-auth `
+  bound_service_account_namespaces=dev `
+  policies=leninkart-policy `
+  ttl=24h
+```
+
+### 6. Store Secrets in Vault
+
+```powershell
+# Database credentials
+vault kv put secret/leninkart/product-service/database `
+  username=product_user `
+  password=SecurePassword123!
+
+vault kv put secret/leninkart/order-service/database `
+  username=order_user `
+  password=SecurePassword456!
+
+# Kafka credentials
+vault kv put secret/leninkart/kafka/credentials `
+  username=kafka_user `
+  password=KafkaPassword789!
+
+# Application config
+vault kv put secret/leninkart/product-service/config `
+  jwt_secret=MyJWTSecret123 `
+  api_key=MyAPIKey456
+
+vault kv put secret/leninkart/order-service/config `
+  jwt_secret=MyJWTSecret123 `
+  api_key=MyAPIKey456
+
+# Verify secrets are stored
+vault kv list secret/leninkart
+```
+
+### 7. Enable ExternalSecrets Sync
+
+Now that Vault is initialized and has secrets, enable the ExternalSecrets app:
+
+**Option A: Via ArgoCD UI**
+1. Go to ArgoCD UI
+2. Find `vault-externalsecrets` application
+3. Click "APP DETAILS" → "SYNC POLICY"
+4. Enable "AUTO-SYNC"
+5. Click "SYNC" button
+
+**Option B: Via kubectl**
+```powershell
+kubectl patch application vault-externalsecrets -n argocd --type merge -p '{
+  "spec": {
+    "syncPolicy": {
+      "automated": {
+        "prune": true,
+        "selfHeal": true
+      }
+    }
+  }
+}'
+
+# Trigger sync
+argocd app sync vault-externalsecrets
+```
+
+### 8. Verify ExternalSecrets
+
+```powershell
+# Check ExternalSecret resources
+kubectl get externalsecrets -n dev
+
+# Expected output:
+# NAME                          STORE           REFRESH   STATUS
+# product-service-db-creds      vault-backend   1h        SecretSynced
+# order-service-db-creds        vault-backend   1h        SecretSynced
+# kafka-creds                   vault-backend   1h        SecretSynced
+
+# Check created Kubernetes Secrets
+kubectl get secrets -n dev | findstr service
+
+# Describe a secret to verify content
+kubectl describe secret product-service-db-secret -n dev
+```
+
+### 9. Update Application Deployments
+
+Update your Helm deployment templates to use the Vault-managed secrets:
+
+```yaml
+spec:
+  containers:
+    - name: app
+      envFrom:
+        - secretRef:
+            name: product-service-db-secret
+        - secretRef:
+            name: product-service-config-secret
+```
+
+## Troubleshooting
+
+### Vault Pod in CrashLoopBackOff
+```powershell
+kubectl logs -n vault vault-0
+kubectl describe pod -n vault vault-0
+```
+
+### Vault Sealed After Restart
+```powershell
+kubectl exec -n vault vault-0 -- vault operator unseal <UNSEAL_KEY>
+```
+
+### ExternalSecret Not Syncing
+```powershell
+kubectl describe externalsecret product-service-db-creds -n dev
+kubectl logs -n external-secrets-system -l app.kubernetes.io/name=external-secrets
+```
+
+### SecretStore Authentication Failed
+```powershell
+# Check service account
+kubectl get sa vault-auth -n dev
+
+# Check Vault role
+vault read auth/kubernetes/role/leninkart-role
+
+# Test authentication
+kubectl exec -n dev -it <pod-name> -- sh
+cat /var/run/secrets/kubernetes.io/serviceaccount/token
+```
+
+## Unsealing Vault Automatically (Optional)
+
+For production, consider using auto-unseal with cloud KMS:
+- AWS KMS
+- Azure Key Vault
+- GCP Cloud KMS
+
+For dev, you can create a Job to unseal on startup (not recommended for prod):
+
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-unseal
+  namespace: vault
+spec:
+  template:
+    spec:
+      containers:
+        - name: unseal
+          image: hashicorp/vault:1.15.4
+          env:
+            - name: VAULT_ADDR
+              value: "http://vault:8200"
+            - name: UNSEAL_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vault-unseal-key
+                  key: unseal-key
+          command:
+            - sh
+            - -c
+            - vault operator unseal $UNSEAL_KEY
+      restartPolicy: OnFailure
+```
+
+## Access Vault UI
+
+```powershell
+kubectl port-forward -n vault svc/vault-ui 8200:8200
+```
+
+Open: http://localhost:8200
+
+Login with root token.
+
+## Monitoring
+
+Add to your Prometheus scrape configs:
+
+```yaml
+- job_name: 'vault'
+  static_configs:
+    - targets: ['vault.vault.svc.cluster.local:8200']
+```
+
+## Backup
+
+```powershell
+# Create snapshot (Raft storage)
+kubectl exec -n vault vault-0 -- vault operator raft snapshot save /tmp/vault-backup.snap
+
+# Copy to local
+kubectl cp vault/vault-0:/tmp/vault-backup.snap ./vault-backup-$(date +%Y%m%d).snap
+```
+"""
+
+write_file(init_guide_file, init_guide)
+
+# ============================================
+# 7. Create Quick Commands Script
+# ============================================
+
+log("\n7. Creating quick commands script...")
+
+commands_file = INFRA_REPO / "scripts" / "vault-commands.ps1"
+
+commands_script = """# Vault Quick Commands
+# ====================
+
+# Set Vault address (run in every new terminal)
+$env:VAULT_ADDR='http://127.0.0.1:8200'
+
+# Function to port-forward to Vault
+function Start-VaultPortForward {
+    Write-Host "Starting port-forward to Vault..."
+    Start-Job -ScriptBlock {
+        kubectl port-forward -n vault svc/vault 8200:8200
+    }
+    Start-Sleep -Seconds 3
+}
+
+# Function to initialize Vault
+function Initialize-Vault {
+    vault operator init -key-shares=1 -key-threshold=1 -format=json | Out-File vault-keys.json
+    $keys = Get-Content vault-keys.json | ConvertFrom-Json
+    
+    Write-Host "=================================================="
+    Write-Host "SAVE THESE CREDENTIALS SECURELY!"
+    Write-Host "=================================================="
+    Write-Host "Unseal Key: $($keys.unseal_keys_b64[0])"
+    Write-Host "Root Token: $($keys.root_token)"
+    Write-Host "=================================================="
+    Write-Host ""
+    Write-Host "Credentials saved to: vault-keys.json"
+    Write-Host "Run: Unseal-Vault to unseal now"
+}
+
+# Function to unseal Vault
+function Unseal-Vault {
+    $keys = Get-Content vault-keys.json | ConvertFrom-Json
+    vault operator unseal $keys.unseal_keys_b64[0]
+}
+
+# Function to login to Vault
+function Login-Vault {
+    $keys = Get-Content vault-keys.json | ConvertFrom-Json
+    vault login $keys.root_token
+}
+
+# Function to check Vault status
+function Get-VaultStatus {
+    vault status
+}
+
+# Function to store a secret
+function Set-VaultSecret {
+    param(
+        [string]$Path,
+        [hashtable]$Data
+    )
+    
+    $dataArgs = @()
+    foreach ($key in $Data.Keys) {
+        $dataArgs += "$key=$($Data[$key])"
+    }
+    
+    vault kv put "secret/$Path" @dataArgs
+}
+
+# Function to get a secret
+function Get-VaultSecret {
+    param([string]$Path)
+    vault kv get "secret/$Path"
+}
+
+# Function to list secrets
+function Get-VaultSecrets {
+    param([string]$Path = "leninkart")
+    vault kv list "secret/$Path"
+}
+
+# Example usage:
+# Start-VaultPortForward
+# Initialize-Vault
+# Unseal-Vault
+# Login-Vault
+# Set-VaultSecret -Path "leninkart/test" -Data @{username="user"; password="pass"}
+# Get-VaultSecret -Path "leninkart/test"
+"""
+
+write_file(commands_file, commands_script)
+
+# ============================================
+# Done
+# ============================================
+
+log("\n" + "=" * 70)
+log("✓ ARGOCD APPLICATIONS CREATED!")
+log("=" * 70)
+
+print(f"""
+FILES CREATED:
+
+1. ArgoCD Applications:
+   ✓ argocd/applications/dev/external-secrets-operator.yaml (wave 1)
+   ✓ argocd/applications/dev/vault.yaml (wave 2)
+   ✓ argocd/applications/dev/vault-secretstore.yaml (wave 3)
+   ✓ argocd/applications/dev/vault-externalsecrets.yaml (wave 4 - manual)
+
+2. Documentation:
+   ✓ docs/VAULT_ARGOCD_INIT.md
+   ✓ scripts/vault-commands.ps1
+
+NEXT STEPS:
+
+1. Review the changes:
+   cd {INFRA_REPO}
+   git status
+   git diff
+
+2. Commit and push:
+   git add .
+   git commit -m "feat: add ArgoCD applications for Vault stack with sync waves"
+   git push origin dev
+
+3. Watch ArgoCD deploy (in UI or CLI):
+   kubectl get applications -n argocd -w
+
+4. After pods are running, initialize Vault:
+   kubectl port-forward -n vault svc/vault 8200:8200
+   
+   # In another terminal:
+   $env:VAULT_ADDR='http://127.0.0.1:8200'
+   vault operator init -key-shares=1 -key-threshold=1
+   vault operator unseal <KEY>
+   vault login <TOKEN>
+
+5. Configure Vault (follow docs/VAULT_ARGOCD_INIT.md)
+
+6. Enable ExternalSecrets sync:
+   argocd app set vault-externalsecrets --sync-policy automated
+
+7. Verify:
+   kubectl get externalsecrets -n dev
+   kubectl get secrets -n dev
+
+DEPLOYMENT ORDER (Automatic):
+Wave 1 → ESO pods ready → Wave 2 → Vault pod ready → Wave 3 → SecretStore created
+Wave 4 (manual) → Initialize Vault → Store secrets → Enable sync → Secrets created
+
+Read full guide: docs/VAULT_ARGOCD_INIT.md
+Quick commands: scripts/vault-commands.ps1
+""")
+```
+
 ### FILE: helm_order-service_values-dev.yaml
 ```
 replicaCount: 1
@@ -1264,6 +2057,254 @@ NEXT STEPS:
 ### FILE: project_dump.txt
 ```
 
+```
+
+### FILE: synch-voult.py
+```
+#!/usr/bin/env python3
+"""
+ArgoCD Vault Apps Sync Script (Pure Python)
+============================================
+Syncs Vault-related ArgoCD applications in correct order
+"""
+
+import subprocess
+import time
+import sys
+
+def log(msg, color=""):
+    colors = {
+        "green": "\033[92m",
+        "yellow": "\033[93m",
+        "red": "\033[91m",
+        "cyan": "\033[96m",
+        "reset": "\033[0m"
+    }
+    color_code = colors.get(color, colors["reset"])
+    print(f"{color_code}{msg}{colors['reset']}")
+
+def run_cmd(cmd, capture=False, check=False):
+    """Run command and return success status"""
+    log(f"Running: {cmd}", "cyan")
+    try:
+        if capture:
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+            return result.stdout.strip() if result.returncode == 0 else None
+        else:
+            result = subprocess.run(cmd, shell=True, timeout=30)
+            return result.returncode == 0
+    except Exception as e:
+        log(f"Error: {e}", "red")
+        return False if not capture else None
+
+log("=" * 70, "cyan")
+log("ArgoCD Vault Stack Sync", "cyan")
+log("=" * 70, "cyan")
+
+# Step 1: Show current status
+log("\n1. Current Application Status:", "green")
+run_cmd("kubectl get applications -n argocd | findstr /I \"vault external\"")
+
+# Step 2: Identify apps
+log("\n2. Checking which Vault apps exist...", "green")
+
+apps_to_sync = []
+
+# Check for each possible app name
+app_names = [
+    "external-secrets-operator",
+    "vault",
+    "vault-dev",
+    "vault-secretstores-dev",
+    "vault-secretstore",
+    "vault-externalsecrets"
+]
+
+for app_name in app_names:
+    result = run_cmd(f"kubectl get application {app_name} -n argocd -o name 2>nul", capture=True)
+    if result:
+        log(f"  Found: {app_name}", "yellow")
+        apps_to_sync.append(app_name)
+
+if not apps_to_sync:
+    log("No Vault apps found!", "red")
+    sys.exit(1)
+
+# Step 3: Ask to proceed
+log(f"\n3. Found {len(apps_to_sync)} apps to sync", "green")
+response = input("\nProceed with sync? (y/n): ")
+
+if response.lower() != 'y':
+    log("Sync cancelled", "yellow")
+    sys.exit(0)
+
+# Step 4: Check if argocd CLI is available
+log("\n4. Checking for ArgoCD CLI...", "green")
+argocd_available = run_cmd("argocd version 2>nul", capture=True)
+
+if argocd_available:
+    log("ArgoCD CLI found, using it", "green")
+    use_cli = True
+else:
+    log("ArgoCD CLI not found, using kubectl", "yellow")
+    use_cli = False
+
+# Step 5: Sync apps in order
+log("\n5. Syncing applications...", "green")
+
+# Sync ESO first
+if "external-secrets-operator" in apps_to_sync:
+    log("\nSyncing External Secrets Operator...", "yellow")
+    if use_cli:
+        run_cmd("argocd app sync external-secrets-operator --force")
+    else:
+        run_cmd("kubectl patch application external-secrets-operator -n argocd --type merge -p '{\"operation\":{\"sync\":{}}}'")
+
+    
+    log("Waiting 30s for ESO to deploy...", "cyan")
+    time.sleep(30)
+    run_cmd("kubectl get pods -n external-secrets-system")
+
+# Sync Vault
+vault_app = None
+for app in ["vault-dev", "vault"]:
+    if app in apps_to_sync:
+        vault_app = app
+        break
+
+if vault_app:
+    log(f"\nSyncing {vault_app}...", "yellow")
+    if use_cli:
+        run_cmd(f"argocd app sync {vault_app} --force")
+    else:
+        run_cmd(f"kubectl patch application {vault_app} -n argocd --type merge -p '{{\"operation\":{{\"sync\":{{}}}}}}'")
+
+    
+    log("Waiting 20s for Vault to deploy...", "cyan")
+    time.sleep(20)
+    run_cmd("kubectl get pods -n vault")
+
+# Sync SecretStore
+secretstore_app = None
+for app in ["vault-secretstores-dev", "vault-secretstore"]:
+    if app in apps_to_sync:
+        secretstore_app = app
+        break
+
+if secretstore_app:
+    log(f"\nSyncing {secretstore_app}...", "yellow")
+    if use_cli:
+        run_cmd(f"argocd app sync {secretstore_app} --force")
+    else:
+        run_cmd(f"kubectl patch application {secretstore_app} -n argocd --type merge -p '{{\"operation\":{{\"sync\":{{}}}}}}'")
+
+    
+    log("Waiting 10s...", "cyan")
+    time.sleep(10)
+
+# Don't sync ExternalSecrets yet (needs Vault initialization)
+if "vault-externalsecrets" in apps_to_sync:
+    log("\nSkipping vault-externalsecrets (sync after Vault initialization)", "yellow")
+
+# Step 6: Final status check
+log("\n" + "=" * 70, "green")
+log("SYNC COMPLETE - Checking Status", "green")
+log("=" * 70, "green")
+
+log("\nApplications:", "cyan")
+run_cmd("kubectl get applications -n argocd | findstr /I \"vault external\"")
+
+log("\nExternal Secrets Operator Pods:", "cyan")
+run_cmd("kubectl get pods -n external-secrets-system")
+
+log("\nVault Pods:", "cyan")
+run_cmd("kubectl get pods -n vault")
+
+log("\nSecretStore Resources:", "cyan")
+result = run_cmd("kubectl get secretstore -n dev 2>nul", capture=True)
+if result:
+    print(result)
+else:
+    log("  (SecretStore CRD not installed yet)", "yellow")
+
+# Step 7: Next steps
+log("\n" + "=" * 70, "cyan")
+log("NEXT STEPS", "cyan")
+log("=" * 70, "cyan")
+
+print("""
+IF ALL PODS ARE RUNNING:
+
+1. Initialize Vault (in separate terminal):
+   kubectl port-forward -n vault svc/vault 8200:8200
+
+2. In another terminal:
+   $env:VAULT_ADDR='http://127.0.0.1:8200'
+   vault operator init -key-shares=1 -key-threshold=1
+   
+   # Save output:
+   # Unseal Key: xxx
+   # Root Token: xxx
+   
+   vault operator unseal <UNSEAL_KEY>
+   vault login <ROOT_TOKEN>
+
+3. Configure Vault:
+   vault secrets enable -version=2 -path=secret kv
+   vault auth enable kubernetes
+   
+   vault write auth/kubernetes/config \\
+     kubernetes_host="https://kubernetes.default.svc:443"
+   
+   vault policy write leninkart-policy - <<EOF
+   path "secret/data/leninkart/*" {
+     capabilities = ["read", "list"]
+   }
+   EOF
+   
+   vault write auth/kubernetes/role/leninkart-role \\
+     bound_service_account_names=vault-auth \\
+     bound_service_account_namespaces=dev \\
+     policies=leninkart-policy \\
+     ttl=24h
+
+4. Store secrets:
+   vault kv put secret/leninkart/product-service/database \\
+     username=product_user \\
+     password=SecurePassword123
+
+   vault kv put secret/leninkart/order-service/database \\
+     username=order_user \\
+     password=SecurePassword456
+
+5. Sync ExternalSecrets app:
+   argocd app sync vault-externalsecrets
+   # OR
+   kubectl patch application vault-externalsecrets -n argocd --type merge -p '{"operation":{"sync":{}}}'
+
+6. Verify:
+   kubectl get externalsecrets -n dev
+   kubectl get secrets -n dev | findstr service
+
+TROUBLESHOOTING:
+
+If apps still stuck:
+  kubectl describe application external-secrets-operator -n argocd
+  kubectl logs -n argocd -l app.kubernetes.io/name=argocd-application-controller --tail=50
+
+If pods not starting:
+  kubectl describe pod -n external-secrets-system <pod-name>
+  kubectl describe pod -n vault vault-0
+  kubectl logs -n vault vault-0
+
+Access ArgoCD UI:
+  kubectl port-forward -n argocd svc/argocd-server 8080:443
+  # Get password:
+  kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | python -m base64 -d
+  # Open: https://localhost:8080 (username: admin)
+""")
+
+log("\nDone!", "green")
 ```
 
 ### FILE: voult.py
@@ -2360,26 +3401,32 @@ kind: Application
 metadata:
   name: leninkart-root
   namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: leninkart
-
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: dev
     path: argocd/applications/dev
     directory:
       recurse: true
-
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
-
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+      allowEmpty: false
     syncOptions:
       - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
 ```
 
 ### FILE: argocd\project.yaml
@@ -2390,32 +3437,41 @@ metadata:
   name: leninkart
   namespace: argocd
 spec:
-  description: LeninKart DevOps Project (DEV only)
-
+  description: LeninKart microservices platform with observability and secrets management
+  
+  # Source repositories
   sourceRepos:
-    - https://charts.bitnami.com/bitnami
-    - https://charts.external-secrets.io
-    - https://github.com/Leninfitfreak/*
-
+    - 'https://github.com/Leninfitfreak/leninkart-infra.git'
+    - 'https://charts.external-secrets.io'  # External Secrets Operator Helm chart
+    - 'https://istio-release.storage.googleapis.com/charts'  # Istio (if needed)
+    - '*'  # Allow all repos (remove in production)
+  
+  # Destination clusters and namespaces
   destinations:
     - namespace: dev
       server: https://kubernetes.default.svc
-    - namespace: argocd
+    - namespace: staging
       server: https://kubernetes.default.svc
-    - namespace: external-secrets-system
+    - namespace: prod
       server: https://kubernetes.default.svc
     - namespace: vault
       server: https://kubernetes.default.svc
+    - namespace: external-secrets-system
+      server: https://kubernetes.default.svc
     - namespace: istio-system
       server: https://kubernetes.default.svc
-
+    - namespace: '*'  # Allow all namespaces (restrict in production)
+      server: https://kubernetes.default.svc
+  
+  # Cluster resource allow list
   clusterResourceWhitelist:
-    - group: "*"
-      kind: "*"
-
+    - group: '*'
+      kind: '*'
+  
+  # Namespace resource allow list
   namespaceResourceWhitelist:
-    - group: "*"
-      kind: "*"
+    - group: '*'
+      kind: '*'
 ```
 
 ### DIRECTORY: argocd\applications/
@@ -2429,6 +3485,10 @@ kind: Application
 metadata:
   name: external-secrets-operator
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"  # Deploy first
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: leninkart
   source:
@@ -2436,21 +3496,55 @@ spec:
     chart: external-secrets
     targetRevision: 0.9.11
     helm:
-      valuesObject:
+      releaseName: external-secrets
+      values: |
         installCRDs: true
+        replicaCount: 1
+        
         resources:
           requests:
             cpu: 50m
             memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        
+        webhook:
+          create: true
+          port: 9443
+        
+        certController:
+          create: true
+        
+        # Enable Prometheus metrics
+        metrics:
+          service:
+            enabled: true
+            port: 8080
+  
   destination:
     server: https://kubernetes.default.svc
     namespace: external-secrets-system
+  
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jsonPointers:
+        - /spec/conversion/webhook/clientConfig/caBundle
 ```
 
 ### FILE: argocd\applications\dev\frontend.yaml
@@ -2718,6 +3812,84 @@ spec:
       selfHeal: true
 ```
 
+### FILE: argocd\applications\dev\vault-externalsecrets.yaml
+```
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault-externalsecrets
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"  # Deploy last
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: k8s/external-secrets/applications
+    directory:
+      recurse: true
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  
+  syncPolicy:
+    # Manual sync initially - enable automated after Vault is initialized
+    automated:
+      prune: false
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+```
+
+### FILE: argocd\applications\dev\vault-secretstore.yaml
+```
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault-secretstore
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"  # Deploy after Vault and ESO
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: k8s/external-secrets
+    directory:
+      recurse: true
+      exclude: "applications/*"  # Don't include app secrets yet
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+```
+
 ### FILE: argocd\applications\dev\vault-secretstores.yaml
 ```
 apiVersion: argoproj.io/v1alpha1
@@ -2725,6 +3897,8 @@ kind: Application
 metadata:
   name: vault-secretstores-dev
   namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: leninkart
   source:
@@ -2738,6 +3912,18 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  # Only sync after ESO is installed
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
 ```
 
 ### FILE: argocd\applications\dev\vault.yaml
@@ -2745,23 +3931,44 @@ spec:
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: vault-dev
+  name: vault
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"  # Deploy after ESO
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: leninkart
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: dev
     path: k8s/vault
+    directory:
+      recurse: true
+  
   destination:
     server: https://kubernetes.default.svc
     namespace: vault
+  
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  # Health checks
+  ignoreDifferences:
+    - group: batch
+      kind: Job
+      jsonPointers:
+        - /spec/template/metadata/labels
 ```
 
 ### DIRECTORY: argocd\applications\prod/
@@ -2901,6 +4108,332 @@ spec:
 ```
 
 ### DIRECTORY: docs/
+
+### FILE: docs\VAULT_ARGOCD_INIT.md
+```
+# Vault ArgoCD Initialization Guide
+
+## Overview
+
+This guide explains how to initialize Vault after ArgoCD deployment.
+
+## Deployment Order (via sync-wave)
+
+ArgoCD will deploy in this order:
+1. **Wave 1**: External Secrets Operator (ESO)
+2. **Wave 2**: Vault StatefulSet
+3. **Wave 3**: SecretStore (connects dev namespace to Vault)
+4. **Wave 4**: ExternalSecrets (creates K8s secrets from Vault) - Manual sync initially
+
+## Step-by-Step Initialization
+
+### 1. Commit and Push Changes
+
+```powershell
+cd C:\Projects\infra\leninkart-infra
+git add argocd/ k8s/
+git commit -m "feat: add ArgoCD apps for Vault stack"
+git push origin dev
+```
+
+### 2. Watch ArgoCD Deploy
+
+```powershell
+# Watch applications
+kubectl get applications -n argocd -w
+
+# Or in ArgoCD UI
+# http://localhost:8080 (if port-forwarded)
+```
+
+**Expected order:**
+- `external-secrets-operator` syncs first (wave 1)
+- `vault` syncs next (wave 2)
+- `vault-secretstore` syncs next (wave 3)
+- `vault-externalsecrets` appears but won't auto-sync (wave 4)
+
+### 3. Verify Pods are Running
+
+```powershell
+# Check ESO
+kubectl get pods -n external-secrets-system
+
+# Expected: external-secrets-xxx Running
+
+# Check Vault
+kubectl get pods -n vault
+
+# Expected: vault-0 Running (but sealed)
+```
+
+### 4. Initialize Vault (ONE-TIME)
+
+**Port-forward to Vault:**
+```powershell
+kubectl port-forward -n vault svc/vault 8200:8200
+```
+
+**In another PowerShell window:**
+```powershell
+# Set environment
+$env:VAULT_ADDR='http://127.0.0.1:8200'
+
+# Check status
+vault status
+# Should show: Initialized: false, Sealed: true
+
+# Initialize Vault
+vault operator init -key-shares=1 -key-threshold=1 -format=json > vault-keys.json
+
+# Extract keys
+$vaultKeys = Get-Content vault-keys.json | ConvertFrom-Json
+$unsealKey = $vaultKeys.unseal_keys_b64[0]
+$rootToken = $vaultKeys.root_token
+
+Write-Host "Unseal Key: $unsealKey"
+Write-Host "Root Token: $rootToken"
+
+# SAVE THESE SECURELY!
+
+# Unseal Vault
+vault operator unseal $unsealKey
+
+# Login
+vault login $rootToken
+
+# Verify
+vault status
+# Should show: Initialized: true, Sealed: false
+```
+
+### 5. Configure Vault
+
+```powershell
+# Still in the PowerShell window with VAULT_ADDR set
+
+# Enable KV secrets engine
+vault secrets enable -version=2 -path=secret kv
+
+# Enable Kubernetes authentication
+vault auth enable kubernetes
+
+# Get Kubernetes config
+kubectl exec -n vault vault-0 -- sh -c 'cat /var/run/secrets/kubernetes.io/serviceaccount/token' > sa-token.txt
+kubectl exec -n vault vault-0 -- sh -c 'cat /var/run/secrets/kubernetes.io/serviceaccount/ca.crt' > ca.crt
+
+# Configure Kubernetes auth
+vault write auth/kubernetes/config `
+  kubernetes_host="https://kubernetes.default.svc:443" `
+  kubernetes_ca_cert=@ca.crt
+
+# Create policy
+vault policy write leninkart-policy - <<EOF
+path "secret/data/leninkart/*" {
+  capabilities = ["read", "list"]
+}
+path "secret/metadata/leninkart/*" {
+  capabilities = ["read", "list"]
+}
+EOF
+
+# Create Kubernetes role
+vault write auth/kubernetes/role/leninkart-role `
+  bound_service_account_names=vault-auth `
+  bound_service_account_namespaces=dev `
+  policies=leninkart-policy `
+  ttl=24h
+```
+
+### 6. Store Secrets in Vault
+
+```powershell
+# Database credentials
+vault kv put secret/leninkart/product-service/database `
+  username=product_user `
+  password=SecurePassword123!
+
+vault kv put secret/leninkart/order-service/database `
+  username=order_user `
+  password=SecurePassword456!
+
+# Kafka credentials
+vault kv put secret/leninkart/kafka/credentials `
+  username=kafka_user `
+  password=KafkaPassword789!
+
+# Application config
+vault kv put secret/leninkart/product-service/config `
+  jwt_secret=MyJWTSecret123 `
+  api_key=MyAPIKey456
+
+vault kv put secret/leninkart/order-service/config `
+  jwt_secret=MyJWTSecret123 `
+  api_key=MyAPIKey456
+
+# Verify secrets are stored
+vault kv list secret/leninkart
+```
+
+### 7. Enable ExternalSecrets Sync
+
+Now that Vault is initialized and has secrets, enable the ExternalSecrets app:
+
+**Option A: Via ArgoCD UI**
+1. Go to ArgoCD UI
+2. Find `vault-externalsecrets` application
+3. Click "APP DETAILS" → "SYNC POLICY"
+4. Enable "AUTO-SYNC"
+5. Click "SYNC" button
+
+**Option B: Via kubectl**
+```powershell
+kubectl patch application vault-externalsecrets -n argocd --type merge -p '{
+  "spec": {
+    "syncPolicy": {
+      "automated": {
+        "prune": true,
+        "selfHeal": true
+      }
+    }
+  }
+}'
+
+# Trigger sync
+argocd app sync vault-externalsecrets
+```
+
+### 8. Verify ExternalSecrets
+
+```powershell
+# Check ExternalSecret resources
+kubectl get externalsecrets -n dev
+
+# Expected output:
+# NAME                          STORE           REFRESH   STATUS
+# product-service-db-creds      vault-backend   1h        SecretSynced
+# order-service-db-creds        vault-backend   1h        SecretSynced
+# kafka-creds                   vault-backend   1h        SecretSynced
+
+# Check created Kubernetes Secrets
+kubectl get secrets -n dev | findstr service
+
+# Describe a secret to verify content
+kubectl describe secret product-service-db-secret -n dev
+```
+
+### 9. Update Application Deployments
+
+Update your Helm deployment templates to use the Vault-managed secrets:
+
+```yaml
+spec:
+  containers:
+    - name: app
+      envFrom:
+        - secretRef:
+            name: product-service-db-secret
+        - secretRef:
+            name: product-service-config-secret
+```
+
+## Troubleshooting
+
+### Vault Pod in CrashLoopBackOff
+```powershell
+kubectl logs -n vault vault-0
+kubectl describe pod -n vault vault-0
+```
+
+### Vault Sealed After Restart
+```powershell
+kubectl exec -n vault vault-0 -- vault operator unseal <UNSEAL_KEY>
+```
+
+### ExternalSecret Not Syncing
+```powershell
+kubectl describe externalsecret product-service-db-creds -n dev
+kubectl logs -n external-secrets-system -l app.kubernetes.io/name=external-secrets
+```
+
+### SecretStore Authentication Failed
+```powershell
+# Check service account
+kubectl get sa vault-auth -n dev
+
+# Check Vault role
+vault read auth/kubernetes/role/leninkart-role
+
+# Test authentication
+kubectl exec -n dev -it <pod-name> -- sh
+cat /var/run/secrets/kubernetes.io/serviceaccount/token
+```
+
+## Unsealing Vault Automatically (Optional)
+
+For production, consider using auto-unseal with cloud KMS:
+- AWS KMS
+- Azure Key Vault
+- GCP Cloud KMS
+
+For dev, you can create a Job to unseal on startup (not recommended for prod):
+
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-unseal
+  namespace: vault
+spec:
+  template:
+    spec:
+      containers:
+        - name: unseal
+          image: hashicorp/vault:1.15.4
+          env:
+            - name: VAULT_ADDR
+              value: "http://vault:8200"
+            - name: UNSEAL_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vault-unseal-key
+                  key: unseal-key
+          command:
+            - sh
+            - -c
+            - vault operator unseal $UNSEAL_KEY
+      restartPolicy: OnFailure
+```
+
+## Access Vault UI
+
+```powershell
+kubectl port-forward -n vault svc/vault-ui 8200:8200
+```
+
+Open: http://localhost:8200
+
+Login with root token.
+
+## Monitoring
+
+Add to your Prometheus scrape configs:
+
+```yaml
+- job_name: 'vault'
+  static_configs:
+    - targets: ['vault.vault.svc.cluster.local:8200']
+```
+
+## Backup
+
+```powershell
+# Create snapshot (Raft storage)
+kubectl exec -n vault vault-0 -- vault operator raft snapshot save /tmp/vault-backup.snap
+
+# Copy to local
+kubectl cp vault/vault-0:/tmp/vault-backup.snap ./vault-backup-$(date +%Y%m%d).snap
+```
+```
 
 ### FILE: docs\VAULT_SETUP.md
 ```
@@ -5250,6 +6783,92 @@ echo "Vault configuration complete!"
 ```
 
 ### DIRECTORY: scripts/
+
+### FILE: scripts\vault-commands.ps1
+```
+# Vault Quick Commands
+# ====================
+
+# Set Vault address (run in every new terminal)
+$env:VAULT_ADDR='http://127.0.0.1:8200'
+
+# Function to port-forward to Vault
+function Start-VaultPortForward {
+    Write-Host "Starting port-forward to Vault..."
+    Start-Job -ScriptBlock {
+        kubectl port-forward -n vault svc/vault 8200:8200
+    }
+    Start-Sleep -Seconds 3
+}
+
+# Function to initialize Vault
+function Initialize-Vault {
+    vault operator init -key-shares=1 -key-threshold=1 -format=json | Out-File vault-keys.json
+    $keys = Get-Content vault-keys.json | ConvertFrom-Json
+    
+    Write-Host "=================================================="
+    Write-Host "SAVE THESE CREDENTIALS SECURELY!"
+    Write-Host "=================================================="
+    Write-Host "Unseal Key: $($keys.unseal_keys_b64[0])"
+    Write-Host "Root Token: $($keys.root_token)"
+    Write-Host "=================================================="
+    Write-Host ""
+    Write-Host "Credentials saved to: vault-keys.json"
+    Write-Host "Run: Unseal-Vault to unseal now"
+}
+
+# Function to unseal Vault
+function Unseal-Vault {
+    $keys = Get-Content vault-keys.json | ConvertFrom-Json
+    vault operator unseal $keys.unseal_keys_b64[0]
+}
+
+# Function to login to Vault
+function Login-Vault {
+    $keys = Get-Content vault-keys.json | ConvertFrom-Json
+    vault login $keys.root_token
+}
+
+# Function to check Vault status
+function Get-VaultStatus {
+    vault status
+}
+
+# Function to store a secret
+function Set-VaultSecret {
+    param(
+        [string]$Path,
+        [hashtable]$Data
+    )
+    
+    $dataArgs = @()
+    foreach ($key in $Data.Keys) {
+        $dataArgs += "$key=$($Data[$key])"
+    }
+    
+    vault kv put "secret/$Path" @dataArgs
+}
+
+# Function to get a secret
+function Get-VaultSecret {
+    param([string]$Path)
+    vault kv get "secret/$Path"
+}
+
+# Function to list secrets
+function Get-VaultSecrets {
+    param([string]$Path = "leninkart")
+    vault kv list "secret/$Path"
+}
+
+# Example usage:
+# Start-VaultPortForward
+# Initialize-Vault
+# Unseal-Vault
+# Login-Vault
+# Set-VaultSecret -Path "leninkart/test" -Data @{username="user"; password="pass"}
+# Get-VaultSecret -Path "leninkart/test"
+```
 
 ### FILE: scripts\vault-quickstart.sh
 ```

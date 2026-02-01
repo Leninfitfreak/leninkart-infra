@@ -8,13 +8,21 @@ data:
     ui = true
     
     listener "tcp" {
-      address = "0.0.0.0:8200"
-      tls_disable = 1
+      address       = "0.0.0.0:8200"
+      tls_disable   = 1
+      telemetry {
+        unauthenticated_metrics_access = true
+      }
     }
     
     storage "file" {
       path = "/vault/data"
     }
     
-    # Development mode - for production use proper storage backend
+    api_addr = "http://0.0.0.0:8200"
+    cluster_addr = "http://0.0.0.0:8201"
+    
+    # Development mode settings
     disable_mlock = true
+    default_lease_ttl = "168h"
+    max_lease_ttl = "720h"
