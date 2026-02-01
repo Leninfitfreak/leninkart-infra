@@ -285,278 +285,211 @@ if __name__ == "__main__":
     dump_project_to_file(root_dir=args.root, output_file=args.output)
 ```
 
-### FILE: fix.py
+### FILE: ervability stack
 ```
-#!/usr/bin/env python3
-"""
-LeninKart Kubernetes Diagnostic Script
-=======================================
-Analyzes the entire Kubernetes deployment to identify issues.
-Run this and share the output!
-"""
-
-import subprocess
-import json
-import sys
-from datetime import datetime
-
-# ANSI color codes
-GREEN = '\033[92m'
-RED = '\033[91m'
-YELLOW = '\033[93m'
-BLUE = '\033[94m'
-RESET = '\033[0m'
-
-def run_cmd(cmd):
-    """Run a kubectl command and return output"""
-    try:
-        result = subprocess.run(
-            cmd,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-        return result.stdout, result.stderr, result.returncode
-    except Exception as e:
-        return "", str(e), 1
-
-def log(msg, color=RESET):
-    """Print colored log message"""
-    print(f"{color}[DIAG] {msg}{RESET}")
-
-def section(title):
-    """Print section header"""
-    print(f"\n{BLUE}{'='*70}{RESET}")
-    print(f"{BLUE}{title}{RESET}")
-    print(f"{BLUE}{'='*70}{RESET}\n")
-
-def check_pods():
-    """Check pod status"""
-    section("1. POD STATUS")
-    stdout, stderr, code = run_cmd("kubectl get pods -n dev -o wide")
-    print(stdout)
-    
-    # Parse and analyze
-    lines = stdout.strip().split('\n')[1:]  # Skip header
-    issues = []
-    for line in lines:
-        parts = line.split()
-        if len(parts) < 3:
-            continue
-        name, ready, status = parts[0], parts[1], parts[2]
-        
-        if status != "Running":
-            issues.append(f"{RED}✗ {name}: {status}{RESET}")
-        elif ready != "1/1":
-            issues.append(f"{YELLOW}⚠ {name}: Ready {ready}{RESET}")
-        else:
-            print(f"{GREEN}✓ {name}: Running and Ready{RESET}")
-    
-    if issues:
-        print("\nISSUES FOUND:")
-        for issue in issues:
-            print(issue)
-    
-    return len(issues) == 0
-
-def check_services():
-    """Check service configuration"""
-    section("2. SERVICE STATUS")
-    stdout, _, _ = run_cmd("kubectl get svc -n dev -o wide")
-    print(stdout)
-    
-    section("2a. SERVICE ENDPOINTS")
-    stdout, _, _ = run_cmd("kubectl get endpoints -n dev")
-    print(stdout)
-    
-    # Check for services with no endpoints
-    lines = stdout.strip().split('\n')[1:]
-    issues = []
-    for line in lines:
-        parts = line.split()
-        if len(parts) < 2:
-            continue
-        name, endpoints = parts[0], parts[1]
-        
-        if endpoints == "<none>" or not endpoints:
-            issues.append(f"{RED}✗ {name}: NO ENDPOINTS{RESET}")
-        else:
-            print(f"{GREEN}✓ {name}: {endpoints}{RESET}")
-    
-    if issues:
-        print("\nSERVICE ISSUES:")
-        for issue in issues:
-            print(issue)
-    
-    return len(issues) == 0
-
-def check_service_selectors():
-    """Check if service selectors match pod labels"""
-    section("3. SERVICE SELECTOR VALIDATION")
-    
-    services = ["leninkart-frontend", "leninkart-product-service", "leninkart-order-service"]
-    all_match = True
-    
-    for svc in services:
-        log(f"Checking {svc}...")
-        
-        # Get service selector
-        stdout, _, _ = run_cmd(f"kubectl get svc {svc} -n dev -o jsonpath='{{.spec.selector}}'")
-        print(f"  Service selector: {stdout}")
-        
-        # Get matching pods
-        # Extract selector pairs from JSON
-        try:
-            selector_dict = json.loads(stdout.replace("'", '"'))
-            selector_parts = [f"{k}={v}" for k, v in selector_dict.items()]
-            selector_str = ",".join(selector_parts)
-            
-            stdout, _, _ = run_cmd(f"kubectl get pods -n dev -l {selector_str} -o name")
-            matching_pods = stdout.strip().split('\n') if stdout.strip() else []
-            
-            if matching_pods and matching_pods[0]:
-                print(f"{GREEN}  ✓ Matching pods: {len(matching_pods)}{RESET}")
-                for pod in matching_pods[:3]:  # Show first 3
-                    print(f"    - {pod}")
-            else:
-                print(f"{RED}  ✗ NO MATCHING PODS FOUND!{RESET}")
-                all_match = False
-        except Exception as e:
-            print(f"{RED}  ✗ Error parsing selector: {e}{RESET}")
-            all_match = False
-        
-        print()
-    
-    return all_match
-
-def check_ingress():
-    """Check ingress configuration"""
-    section("4. INGRESS STATUS")
-    stdout, _, _ = run_cmd("kubectl get ingress -n dev")
-    print(stdout)
-    
-    section("4a. INGRESS DETAILS")
-    stdout, _, _ = run_cmd("kubectl describe ingress leninkart-ingress -n dev")
-    print(stdout)
-
-def check_ingress_controller():
-    """Check ingress controller status"""
-    section("5. INGRESS CONTROLLER")
-    stdout, _, _ = run_cmd("kubectl get pods -n ingress-nginx")
-    print(stdout)
-    
-    section("5a. INGRESS CONTROLLER LOGS (Last 30 lines)")
-    stdout, _, _ = run_cmd("kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx --tail=30")
-    
-    # Highlight warnings
-    for line in stdout.split('\n'):
-        if "does not have any active Endpoint" in line:
-            print(f"{RED}{line}{RESET}")
-        elif "WARN" in line or "ERROR" in line:
-            print(f"{YELLOW}{line}{RESET}")
-        else:
-            print(line)
-
-def check_connectivity():
-    """Test internal connectivity"""
-    section("6. CONNECTIVITY TESTS")
-    
-    services = [
-        ("Product Service", "leninkart-product-service.dev.svc.cluster.local:8081/api/products"),
-        ("Order Service", "leninkart-order-service.dev.svc.cluster.local:8080/api/orders"),
-        ("Frontend", "leninkart-frontend.dev.svc.cluster.local:80"),
-    ]
-    
-    for name, url in services:
-        log(f"Testing {name}...")
-        cmd = f"kubectl run test-curl-{name.lower().replace(' ', '-')} --rm -i --restart=Never --image=curlimages/curl --timeout=10s -- curl -s -o /dev/null -w '%{{http_code}}' http://{url}"
-        stdout, stderr, code = run_cmd(cmd)
-        
-        if "200" in stdout:
-            print(f"{GREEN}  ✓ {name}: HTTP 200 OK{RESET}")
-        elif stdout.strip():
-            print(f"{YELLOW}  ⚠ {name}: HTTP {stdout.strip()}{RESET}")
-        else:
-            print(f"{RED}  ✗ {name}: FAILED - {stderr[:100]}{RESET}")
-        print()
-
-def check_backend_health():
-    """Check backend service health"""
-    section("7. BACKEND SERVICE HEALTH")
-    
-    # Check product-service logs
-    log("Product Service Recent Logs:")
-    stdout, _, _ = run_cmd("kubectl logs -n dev -l app=product-service --tail=10")
-    print(stdout[-500:] if len(stdout) > 500 else stdout)
-    
-    print()
-    
-    # Check order-service logs
-    log("Order Service Recent Logs:")
-    stdout, _, _ = run_cmd("kubectl logs -n dev -l app.kubernetes.io/name=order-service --tail=10")
-    print(stdout[-500:] if len(stdout) > 500 else stdout)
-
-def check_frontend_image():
-    """Check frontend image and age"""
-    section("8. FRONTEND IMAGE INFO")
-    stdout, _, _ = run_cmd("kubectl get pods -n dev -l app=frontend -o jsonpath='{.items[0].spec.containers[0].image}'")
-    print(f"Image: {stdout}")
-    
-    stdout, _, _ = run_cmd("kubectl get pods -n dev -l app=frontend -o jsonpath='{.items[0].metadata.creationTimestamp}'")
-    print(f"Pod Created: {stdout}")
-    
-    stdout, _, _ = run_cmd("kubectl get pods -n dev -l app=frontend -o jsonpath='{.items[0].status.containerStatuses[0].restartCount}'")
-    print(f"Restart Count: {stdout}")
-
-def main():
-    """Main diagnostic routine"""
-    print(f"\n{GREEN}LeninKart Kubernetes Diagnostic Script{RESET}")
-    print(f"{GREEN}Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{RESET}\n")
-    
-    results = {}
-    
-    results['pods'] = check_pods()
-    results['services'] = check_services()
-    results['selectors'] = check_service_selectors()
-    
-    check_ingress()
-    check_ingress_controller()
-    
-    # Skip connectivity tests if basic checks failed
-    if results['pods'] and results['services']:
-        check_connectivity()
-    else:
-        section("6. CONNECTIVITY TESTS")
-        print(f"{YELLOW}Skipped - Fix pods and services first{RESET}")
-    
-    check_backend_health()
-    check_frontend_image()
-    
-    # Summary
-    section("SUMMARY")
-    all_good = all(results.values())
-    
-    if all_good:
-        print(f"{GREEN}✓ All basic checks passed!{RESET}")
-        print(f"{YELLOW}If app still not working, check ingress controller and connectivity tests above.{RESET}")
-    else:
-        print(f"{RED}✗ Issues found:{RESET}")
-        for check, passed in results.items():
-            status = f"{GREEN}✓{RESET}" if passed else f"{RED}✗{RESET}"
-            print(f"  {status} {check.upper()}")
-    
-    print(f"\n{BLUE}Diagnostic complete!{RESET}\n")
-
-if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print(f"\n{YELLOW}Diagnostic interrupted by user{RESET}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\n{RED}Error: {e}{RESET}")
-        sys.exit(1)
+warning: in the working copy of 'helm/order-service/values-dev.yaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'helm/product-service/values-dev.yaml', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/fix.py b/fix.py[m
+[1mindex a140743..d5cdfd4 100644[m
+[1m--- a/fix.py[m
+[1m+++ b/fix.py[m
+[36m@@ -1,138 +1,500 @@[m
+ #!/usr/bin/env python3[m
+ """[m
+[31m-LeninKart One-Shot Fix Script[m
+[31m-============================[m
+[31m-Fixes:[m
+[31m-- Deletes empty kafka-pvc.yaml[m
+[31m-- Fixes Kafka StatefulSet PVC storageClass[m
+[31m-- Removes merge conflict markers from order-service[m
+[31m-- Creates backups before changes[m
+[31m-[m
+[31m-SAFE FOR GITOPS + ARGOCD[m
+[32m+[m[32mLeninKart Full Observability - FINAL VERSION FOR WINDOWS POWERSHELL[m
+[32m+[m[32m===================================================================[m
+[32m+[m[32mPaths from your screenshots:[m
+[32m+[m[32m- Services: C:\\Projects\\Services[m
+[32m+[m[32m- Infra: C:\\Projects\\infra\\leninkart-infra[m
+[32m+[m
+[32m+[m[32mThis version:[m
+[32m+[m[32m- Uses PowerShell commands[m
+[32m+[m[32m- Correct paths from your VS Code screenshots[m
+[32m+[m[32m- Creates observability stack in infra repo[m
+[32m+[m[32m- Adds OTel config to Helm values (appends if not exists)[m
+ """[m
+ [m
+ import os[m
+[31m-import shutil[m
+[31m-import re[m
+[31m-from datetime import datetime[m
+[32m+[m[32mimport sys[m
+[32m+[m[32mimport subprocess[m
+[32m+[m[32mfrom pathlib import Path[m
+[32m+[m
+[32m+[m[32m# ============================================[m
+[32m+[m[32m# CONFIGURATION FROM YOUR SCREENSHOTS[m
+[32m+[m[32m# ============================================[m
+ [m
+[31m-ROOT = os.getcwd()[m
+[31m-BACKUP_DIR = f"_auto_fix_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"[m
+[32m+[m[32mINFRA_REPO = Path(r"C:\Projects\infra\leninkart-infra")[m
+[32m+[m[32mNAMESPACE = "dev"[m
+[32m+[m[32mGIT_BRANCH = "dev"[m
+[32m+[m[32mOTEL_VERSION = "0.92.0"[m
+[32m+[m[32mJAEGER_VERSION = "1.53"[m
+[32m+[m[32mPROMETHEUS_VERSION = "v2.48.1"[m
+[32m+[m[32mGRAFANA_VERSION = "10.2.3"[m
+[32m+[m[32mOTEL_AGENT_VERSION = "1.32.0"[m
+ [m
+[31m-FILES_TO_FIX = [[m
+[31m-    "k8s/kafka/kafka.yaml",[m
+[31m-    "helm/order-service/values-dev.yaml",[m
+[31m-][m
+[32m+[m[32m# ============================================[m
+[32m+[m[32m# Helpers[m
+[32m+[m[32m# ============================================[m
+ [m
+ def log(msg):[m
+[31m-    print(f"[FIX] {msg}")[m
+[31m-[m
+[31m-def backup(path):[m
+[31m-    os.makedirs(BACKUP_DIR, exist_ok=True)[m
+[31m-    target = os.path.join(BACKUP_DIR, path)[m
+[31m-    os.makedirs(os.path.dirname(target), exist_ok=True)[m
+[31m-    shutil.copy2(path, target)[m
+[31m-    log(f"Backup created: {target}")[m
+[31m-[m
+[31m-# ------------------------------------------------[m
+[31m-# 1. DELETE EMPTY kafka-pvc.yaml[m
+[31m-# ------------------------------------------------[m
+[31m-def fix_kafka_pvc_file():[m
+[31m-    pvc_file = "k8s/kafka/kafka-pvc.yaml"[m
+[31m-    if os.path.exists(pvc_file):[m
+[31m-        if os.path.getsize(pvc_file) == 0:[m
+[31m-            backup(pvc_file)[m
+[31m-            os.remove(pvc_file)[m
+[31m-            log("Deleted empty kafka-pvc.yaml (correct for StatefulSet)")[m
+[31m-        else:[m
+[31m-            log("kafka-pvc.yaml exists but is not empty – review manually")[m
+[32m+[m[32m    print(f"[OBSERVABILITY] {msg}")[m
+[32m+[m
+[32m+[m[32mdef write_file(path, content):[m
+[32m+[m[32m    path.parent.mkdir(parents=True, exist_ok=True)[m
+[32m+[m[32m    with open(path, 'w', encoding='utf-8', newline='\n') as f:[m
+[32m+[m[32m        f.write(content)[m
+[32m+[m[32m    log(f"✓ {path}")[m
+[32m+[m
+[32m+[m[32m# ============================================[m
+[32m+[m[32m# Create Manifests[m
+[32m+[m[32m# ============================================[m
+[32m+[m
+[32m+[m[32mlog("=" * 70)[m
+[32m+[m[32mlog("Creating Observability Stack")[m
+[32m+[m[32mlog("=" * 70)[m
+[32m+[m
+[32m+[m[32m# 1. OTel Collector[m
+[32m+[m[32mlog("\n1. OpenTelemetry Collector...")[m
+[32m+[m[32motel_dir = INFRA_REPO / "k8s" / "otel"[m
+[32m+[m
+[32m+[m[32mwrite_file(otel_dir / "01-configmap.yaml", f"""apiVersion: v1[m
+[32m+[m[32mkind: ConfigMap[m
+[32m+[m[32mmetadata:[m
+[32m+[m[32m  name: otel-collector-config[m
+[32m+[m[32m  namespace: {NAMESPACE}[m
+[32m+[m[32mdata:[m
+[32m+[m[32m  config.yaml: |[m
+[32m+[m[32m    receivers:[m
+[32m+[m[32m      otlp:[m
+[32m+[m[32m        protocols:[m
+[32m+[m[32m          grpc:[m
+[32m+[m[32m            endpoint: 0.0.0.0:4317[m
+[32m+[m[32m          http:[m
+[32m+[m[32m            endpoint: 0.0.0.0:4318[m
+[32m+[m[32m      zipkin:[m
+[32m+[m[32m        endpoint: 0.0.0.0:9411[m
+[32m+[m[32m    processors:[m
+[32m+[m[32m      batch: {{}}[m
+[32m+[m[32m      memory_limiter:[m
+[32m+[m[32m        limit_mib: 512[m
+[32m+[m[32m    exporters:[m
+[32m+[m[32m      otlp/jaeger:[m
+[32m+[m[32m        endpoint: jaeger-collector:4317[m
+[32m+[m[32m        tls:[m
+[32m+[m[32m          insecure: true[m
+[32m+[m[32m      prometheus:[m
+[32m+[m[32m        endpoint: 0.0.0.0:8889[m
+[32m+[m[32m      logging: {{}}[m
+[32m+[m[32m    service:[m
+[32m+[m[32m      pipelines:[m
+[32m+[m[32m        traces:[m
+[32m+[m[32m          receivers: [otlp, zipkin][m
+[32m+[m[32m          processors: [batch][m
+[32m+[m[32m          exporters: [otlp/jaeger, logging][m
+[32m+[m[32m        metrics:[m
+[32m+[m[32m          receivers: [otlp][m
+[32m+[m[32m          processors: [batch][m
+[32m+[m[32m          exporters: [prometheus][m
+[32m+[m[32m""")[m
+[32m+[m
+[32m+[m[32mwrite_file(otel_dir / "02-deployment.yaml", f"""apiVersion: apps/v1[m
+[32m+[m[32mkind: Deployment[m
+[32m+[m[32mmetadata:[m
+[32m+[m[32m  name: otel-collector[m
+[32m+[m[32m  namespace: {NAMESPACE}[m
+[32m+[m[32mspec:[m
+[32m+[m[32m  replicas: 1[m
+[32m+[m[32m  selector:[m
+[32m+[m[32m    matchLabels:[m
+[32m+[m[32m      app: otel-collector[m
+[32m+[m[32m  template:[m
+[32m+[m[32m    metadata:[m
+[32m+[m[32m      labels:[m
+[32m+[m[32m        app: otel-collector[m
+[32m+[m[32m      annotations:[m
+[32m+[m[32m        sidecar.istio.io/inject: "false"[m
+[32m+[m[32m    spec:[m
+[32m+[m[32m      containers:[m
+[32m+[m[32m        - name: otel-collector[m
+[32m+[m[32m          image: otel/opentelemetry-collector-contrib:{OTEL_VERSION}[m
+[32m+[m[32m          args: ["--config=/conf/config.yaml"][m
+[32m+[m[32m          ports:[m
+[32m+[m[32m            - containerPort: 4317[m
+[32m+[m[32m            - containerPort: 4318[m
+[32m+[m[32m            - containerPort: 9411[m
+[32m+[m[32m            - containerPort: 8889[m
+[32m+[m[32m          volumeMounts:[m
+[32m+[m[32m            - name: config[m
+[32m+[m[32m              mountPath: /conf[m
+[32m+[m[32m      volumes:[m
+[32m+[m[32m        - name: config[m
+[32m+[m[32m          configMap:[m
+[32m+[m[32m            name: otel-collector-config[m
+[32m+[m[32m---[m
+[32m+[m[32mapiVersion: v1[m
+[32m+[m[32mkind: Service[m
+[32m+[m[32mmetadata:[m
+[32m+[m[32m  name: otel-collector[m
+[32m+[m[32m  namespace: {NAMESPACE}[m
+[32m+[m[32mspec:[m
+[32m+[m[32m  selector:[m
+[32m+[m[32m    app: otel-collector[m
+[32m+[m[32m  ports:[m
+[32m+[m[32m    - name: otlp-grpc[m
+[32m+[m[32m      port: 4317[m
+[32m+[m[32m    - name: otlp-http[m
+[32m+[m[32m      port: 4318[m
+[32m+[m[32m    - name: zipkin[m
+[32m+[m[32m      port: 9411[m
+[32m+[m[32m    - name: metrics[m
+[32m+[m[32m      port: 8889[m
+[32m+[m[32m""")[m
+[32m+[m
+[32m+[m[32m# 2. Jaeger[m
+[32m+[m[32mlog("2. Jaeger...")[m
+[32m+[m[32mjaeger_dir = INFRA_REPO / "k8s" / "jaeger"[m
+[32m+[m
+[32m+[m[32mwrite_file(jaeger_dir / "jaeger.yaml", f"""apiVersion: apps/v1[m
+[32m+[m[32mkind: Deployment
 ```
 
 ### FILE: helm_order-service_values-dev.yaml
@@ -617,9 +550,1805 @@ service:
   port: 8081
 ```
 
+### FILE: infraleninkart-infra
+```
+warning: in the working copy of 'helm/order-service/values-dev.yaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'helm/product-service/values-dev.yaml', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/fix.py b/fix.py[m
+[1mindex a140743..d5cdfd4 100644[m
+[1m--- a/fix.py[m
+[1m+++ b/fix.py[m
+[36m@@ -1,138 +1,500 @@[m
+ #!/usr/bin/env python3[m
+ """[m
+[31m-LeninKart One-Shot Fix Script[m
+[31m-============================[m
+[31m-Fixes:[m
+[31m-- Deletes empty kafka-pvc.yaml[m
+[31m-- Fixes Kafka StatefulSet PVC storageClass[m
+[31m-- Removes merge conflict markers from order-service[m
+[31m-- Creates backups before changes[m
+[31m-[m
+[31m-SAFE FOR GITOPS + ARGOCD[m
+[32m+[m[32mLeninKart Full Observability - FINAL VERSION FOR WINDOWS POWERSHELL[m
+[32m+[m[32m===================================================================[m
+[32m+[m[32mPaths from your screenshots:[m
+[32m+[m[32m- Services: C:\\Projects\\Services[m
+[32m+[m[32m- Infra: C:\\Projects\\infra\\leninkart-infra[m
+[32m+[m
+[32m+[m[32mThis version:[m
+[32m+[m[32m- Uses PowerShell commands[m
+[32m+[m[32m- Correct paths from your VS Code screenshots[m
+[32m+[m[32m- Creates observability stack in infra repo[m
+[32m+[m[32m- Adds OTel config to Helm values (appends if not exists)[m
+ """[m
+ [m
+ import os[m
+[31m-import shutil[m
+[31m-import re[m
+[31m-from datetime import datetime[m
+[32m+[m[32mimport sys[m
+[32m+[m[32mimport subprocess[m
+[32m+[m[32mfrom pathlib import Path[m
+[32m+[m
+[32m+[m[32m# ============================================[m
+[32m+[m[32m# CONFIGURATION FROM YOUR SCREENSHOTS[m
+[32m+[m[32m# ============================================[m
+ [m
+[31m-ROOT = os.getcwd()[m
+[31m-BACKUP_DIR = f"_auto_fix_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"[m
+[32m+[m[32mINFRA_REPO = Path(r"C:\Projects\infra\leninkart-infra")[m
+[32m+[m[32mNAMESPACE = "dev"[m
+[32m+[m[32mGIT_BRANCH = "dev"[m
+[32m+[m[32mOTEL_VERSION = "0.92.0"[m
+[32m+[m[32mJAEGER_VERSION = "1.53"[m
+[32m+[m[32mPROMETHEUS_VERSION = "v2.48.1"[m
+[32m+[m[32mGRAFANA_VERSION = "10.2.3"[m
+[32m+[m[32mOTEL_AGENT_VERSION = "1.32.0"[m
+ [m
+[31m-FILES_TO_FIX = [[m
+[31m-    "k8s/kafka/kafka.yaml",[m
+[31m-    "helm/order-service/values-dev.yaml",[m
+[31m-][m
+[32m+[m[32m# ============================================[m
+[32m+[m[32m# Helpers[m
+[32m+[m[32m# ============================================[m
+ [m
+ def log(msg):[m
+[31m-    print(f"[FIX] {msg}")[m
+[31m-[m
+[31m-def backup(path):[m
+[31m-    os.makedirs(BACKUP_DIR, exist_ok=True)[m
+[31m-    target = os.path.join(BACKUP_DIR, path)[m
+[31m-    os.makedirs(os.path.dirname(target), exist_ok=True)[m
+[31m-    shutil.copy2(path, target)[m
+[31m-    log(f"Backup created: {target}")[m
+[31m-[m
+[31m-# ------------------------------------------------[m
+[31m-# 1. DELETE EMPTY kafka-pvc.yaml[m
+[31m-# ------------------------------------------------[m
+[31m-def fix_kafka_pvc_file():[m
+[31m-    pvc_file = "k8s/kafka/kafka-pvc.yaml"[m
+[31m-    if os.path.exists(pvc_file):[m
+[31m-        if os.path.getsize(pvc_file) == 0:[m
+[31m-            backup(pvc_file)[m
+[31m-            os.remove(pvc_file)[m
+[31m-            log("Deleted empty kafka-pvc.yaml (correct for StatefulSet)")[m
+[31m-        else:[m
+[31m-            log("kafka-pvc.yaml exists but is not empty – review manually")[m
+[32m+[m[32m    print(f"[OBSERVABILITY] {msg}")[m
+[32m+[m
+[32m+[m[32mdef write_file(path, content):[m
+[32m+[m[32m    path.parent.mkdir(parents=True, exist_ok=True)[m
+[32m+[m[32m    with open(path, 'w', encoding='utf-8', newline='\n') as f:[m
+[32m+[m[32m        f.write(content)[m
+[32m+[m[32m    log(f"✓ {path}")[m
+[32m+[m
+[32m+[m[32m# ============================================[m
+[32m+[m[32m# Create Manifests[m
+[32m+[m[32m# ============================================[m
+[32m+[m
+[32m+[m[32mlog("=" * 70)[m
+[32m+[m[32mlog("Creating Observability Stack")[m
+[32m+[m[32mlog("=" * 70)[m
+[32m+[m
+[32m+[m[32m# 1. OTel Collector[m
+[32m+[m[32mlog("\n1. OpenTelemetry Collector...")[m
+[32m+[m[32motel_dir = INFRA_REPO / "k8s" / "otel"[m
+[32m+[m
+[32m+[m[32mwrite_file(otel_dir / "01-configmap.yaml", f"""apiVersion: v1[m
+[32m+[m[32mkind: ConfigMap[m
+[32m+[m[32mmetadata:[m
+[32m+[m[32m  name: otel-collector-config[m
+[32m+[m[32m  namespace: {NAMESPACE}[m
+[32m+[m[32mdata:[m
+[32m+[m[32m  config.yaml: |[m
+[32m+[m[32m    receivers:[m
+[32m+[m[32m      otlp:[m
+[32m+[m[32m        protocols:[m
+[32m+[m[32m          grpc:[m
+[32m+[m[32m            endpoint: 0.0.0.0:4317[m
+[32m+[m[32m          http:[m
+[32m+[m[32m            endpoint: 0.0.0.0:4318[m
+[32m+[m[32m      zipkin:[m
+[32m+[m[32m        endpoint: 0.0.0.0:9411[m
+[32m+[m[32m    processors:[m
+[32m+[m[32m      batch: {{}}[m
+[32m+[m[32m      memory_limiter:[m
+[32m+[m[32m        limit_mib: 512[m
+[32m+[m[32m    exporters:[m
+[32m+[m[32m      otlp/jaeger:[m
+[32m+[m[32m        endpoint: jaeger-collector:4317[m
+[32m+[m[32m        tls:[m
+[32m+[m[32m          insecure: true[m
+[32m+[m[32m      prometheus:[m
+[32m+[m[32m        endpoint: 0.0.0.0:8889[m
+[32m+[m[32m      logging: {{}}[m
+[32m+[m[32m    service:[m
+[32m+[m[32m      pipelines:[m
+[32m+[m[32m        traces:[m
+[32m+[m[32m          receivers: [otlp, zipkin][m
+[32m+[m[32m          processors: [batch][m
+[32m+[m[32m          exporters: [otlp/jaeger, logging][m
+[32m+[m[32m        metrics:[m
+[32m+[m[32m          receivers: [otlp][m
+[32m+[m[32m          processors: [batch][m
+[32m+[m[32m          exporters: [prometheus][m
+[32m+[m[32m""")[m
+[32m+[m
+[32m+[m[32mwrite_file(otel_dir / "02-deployment.yaml", f"""apiVersion: apps/v1[m
+[32m+[m[32mkind: Deployment[m
+[32m+[m[32mmetadata:[m
+[32m+[m[32m  name: otel-collector[m
+[32m+[m[32m  namespace: {NAMESPACE}[m
+[32m+[m[32mspec:[m
+[32m+[m[32m  replicas: 1[m
+[32m+[m[32m  selector:[m
+[32m+[m[32m    matchLabels:[m
+[32m+[m[32m      app: otel-collector[m
+[32m+[m[32m  template:[m
+[32m+[m[32m    metadata:[m
+[32m+[m[32m      labels:[m
+[32m+[m[32m        app: otel-collector[m
+[32m+[m[32m      annotations:[m
+[32m+[m[32m        sidecar.istio.io/inject: "false"[m
+[32m+[m[32m    spec:[m
+[32m+[m[32m      containers:[m
+[32m+[m[32m        - name: otel-collector[m
+[32m+[m[32m          image: otel/opentelemetry-collector-contrib:{OTEL_VERSION}[m
+[32m+[m[32m          args: ["--config=/conf/config.yaml"][m
+[32m+[m[32m          ports:[m
+[32m+[m[32m            - containerPort: 4317[m
+[32m+[m[32m            - containerPort: 4318[m
+[32m+[m[32m            - containerPort: 9411[m
+[32m+[m[32m            - containerPort: 8889[m
+[32m+[m[32m          volumeMounts:[m
+[32m+[m[32m            - name: config[m
+[32m+[m[32m              mountPath: /conf[m
+[32m+[m[32m      volumes:[m
+[32m+[m[32m        - name: config[m
+[32m+[m[32m          configMap:[m
+[32m+[m[32m            name: otel-collector-config[m
+[32m+[m[32m---[m
+[32m+[m[32mapiVersion: v1[m
+[32m+[m[32mkind: Service[m
+[32m+[m[32mmetadata:[m
+[32m+[m[32m  name: otel-collector[m
+[32m+[m[32m  namespace: {NAMESPACE}[m
+[32m+[m[32mspec:[m
+[32m+[m[32m  selector:[m
+[32m+[m[32m    app: otel-collector[m
+[32m+[m[32m  ports:[m
+[32m+[m[32m    - name: otlp-grpc[m
+[32m+[m[32m      port: 4317[m
+[32m+[m[32m    - name: otlp-http[m
+[32m+[m[32m      port: 4318[m
+[32m+[m[32m    - name: zipkin[m
+[32m+[m[32m      port: 9411[m
+[32m+[m[32m    - name: metrics[m
+[32m+[m[32m      port: 8889[m
+[32m+[m[32m""")[m
+[32m+[m
+[32m+[m[32m# 2. Jaeger[m
+[32m+[m[32mlog("2. Jaeger...")[m
+[32m+[m[32mjaeger_dir = INFRA_REPO / "k8s" / "jaeger"[m
+[32m+[m
+[32m+[m[32mwrite_file(jaeger_dir / "jaeger.yaml", f"""apiVersion: apps/v1[m
+[32m+[m[32mkind: Deployment
+```
+
+### FILE: observability.py
+```
+#!/usr/bin/env python3
+"""
+LeninKart Full Observability - FINAL VERSION FOR WINDOWS POWERSHELL
+===================================================================
+Paths from your screenshots:
+- Services: C:\\Projects\\Services
+- Infra: C:\\Projects\\infra\\leninkart-infra
+
+This version:
+- Uses PowerShell commands
+- Correct paths from your VS Code screenshots
+- Creates observability stack in infra repo
+- Adds OTel config to Helm values (appends if not exists)
+"""
+
+import os
+import sys
+import subprocess
+from pathlib import Path
+
+# ============================================
+# CONFIGURATION FROM YOUR SCREENSHOTS
+# ============================================
+
+INFRA_REPO = Path(r"C:\Projects\infra\leninkart-infra")
+NAMESPACE = "dev"
+GIT_BRANCH = "dev"
+OTEL_VERSION = "0.92.0"
+JAEGER_VERSION = "1.53"
+PROMETHEUS_VERSION = "v2.48.1"
+GRAFANA_VERSION = "10.2.3"
+OTEL_AGENT_VERSION = "1.32.0"
+
+# ============================================
+# Helpers
+# ============================================
+
+def log(msg):
+    print(f"[OBSERVABILITY] {msg}")
+
+def write_file(path, content):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
+        f.write(content)
+    log(f"✓ {path}")
+
+# ============================================
+# Create Manifests
+# ============================================
+
+log("=" * 70)
+log("Creating Observability Stack")
+log("=" * 70)
+
+# 1. OTel Collector
+log("\n1. OpenTelemetry Collector...")
+otel_dir = INFRA_REPO / "k8s" / "otel"
+
+write_file(otel_dir / "01-configmap.yaml", f"""apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: {NAMESPACE}
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+      zipkin:
+        endpoint: 0.0.0.0:9411
+    processors:
+      batch: {{}}
+      memory_limiter:
+        limit_mib: 512
+    exporters:
+      otlp/jaeger:
+        endpoint: jaeger-collector:4317
+        tls:
+          insecure: true
+      prometheus:
+        endpoint: 0.0.0.0:8889
+      logging: {{}}
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp, zipkin]
+          processors: [batch]
+          exporters: [otlp/jaeger, logging]
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [prometheus]
+""")
+
+write_file(otel_dir / "02-deployment.yaml", f"""apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: {NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:{OTEL_VERSION}
+          args: ["--config=/conf/config.yaml"]
+          ports:
+            - containerPort: 4317
+            - containerPort: 4318
+            - containerPort: 9411
+            - containerPort: 8889
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: {NAMESPACE}
+spec:
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+    - name: otlp-http
+      port: 4318
+    - name: zipkin
+      port: 9411
+    - name: metrics
+      port: 8889
+""")
+
+# 2. Jaeger
+log("2. Jaeger...")
+jaeger_dir = INFRA_REPO / "k8s" / "jaeger"
+
+write_file(jaeger_dir / "jaeger.yaml", f"""apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: {NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: jaeger
+          image: jaegertracing/all-in-one:{JAEGER_VERSION}
+          env:
+            - name: COLLECTOR_OTLP_ENABLED
+              value: "true"
+          ports:
+            - containerPort: 4317
+            - containerPort: 16686
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-collector
+  namespace: {NAMESPACE}
+spec:
+  selector:
+    app: jaeger
+  ports:
+    - name: otlp
+      port: 4317
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-query
+  namespace: {NAMESPACE}
+spec:
+  selector:
+    app: jaeger
+  ports:
+    - name: ui
+      port: 16686
+""")
+
+# 3. Prometheus
+log("3. Prometheus...")
+prom_dir = INFRA_REPO / "k8s" / "prometheus"
+
+write_file(prom_dir / "prometheus.yaml", f"""apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: {NAMESPACE}
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      - job_name: otel
+        static_configs:
+          - targets: [otel-collector:8889]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: {NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:{PROMETHEUS_VERSION}
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: {NAMESPACE}
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - port: 9090
+""")
+
+# 4. Grafana
+log("4. Grafana...")
+grafana_dir = INFRA_REPO / "k8s" / "grafana"
+
+write_file(grafana_dir / "grafana.yaml", f"""apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: {NAMESPACE}
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus:9090
+        isDefault: true
+      - name: Jaeger
+        type: jaeger
+        url: http://jaeger-query:16686
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: {NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:{GRAFANA_VERSION}
+          ports:
+            - containerPort: 3000
+          env:
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: "Admin"
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: {NAMESPACE}
+spec:
+  selector:
+    app: grafana
+  ports:
+    - port: 3000
+""")
+
+# 5. Istio
+log("5. Istio Gateway & VirtualService...")
+istio_dir = INFRA_REPO / "k8s" / "istio"
+
+write_file(istio_dir / "gateway.yaml", f"""apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: leninkart-gateway
+  namespace: {NAMESPACE}
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*"
+""")
+
+write_file(istio_dir / "virtualservice.yaml", f"""apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: leninkart-routes
+  namespace: {NAMESPACE}
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - leninkart-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /api/products
+      route:
+        - destination:
+            host: leninkart-product-service
+            port:
+              number: 8081
+    - match:
+        - uri:
+            prefix: /api/orders
+      route:
+        - destination:
+            host: leninkart-order-service
+            port:
+              number: 8080
+    - match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: leninkart-frontend
+            port:
+              number: 80
+""")
+
+write_file(istio_dir / "telemetry.yaml", f"""apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: leninkart-telemetry
+  namespace: {NAMESPACE}
+spec:
+  tracing:
+    - providers:
+        - name: zipkin
+      randomSamplingPercentage: 100.0
+""")
+
+# 6. ArgoCD Apps
+log("6. ArgoCD Applications...")
+argocd_dir = INFRA_REPO / "argocd" / "applications" / NAMESPACE
+
+for app_name, path in [
+    ("otel-collector", "k8s/otel"),
+    ("jaeger", "k8s/jaeger"),
+    ("prometheus", "k8s/prometheus"),
+    ("grafana", "k8s/grafana"),
+    ("istio-config", "k8s/istio"),
+]:
+    write_file(argocd_dir / f"{app_name}.yaml", f"""apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {app_name}-{NAMESPACE}
+  namespace: argocd
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: {GIT_BRANCH}
+    path: {path}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {NAMESPACE}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+""")
+
+# 7. Add OTel to Helm values (if they exist)
+log("\n7. Updating Helm values...")
+
+for service, port in [("product-service", "8081"), ("order-service", "8080")]:
+    values_file = INFRA_REPO / "helm" / service / "values-dev.yaml"
+    if values_file.exists():
+        with open(values_file, 'r') as f:
+            content = f.read()
+        
+        if "otel:" not in content:
+            with open(values_file, 'a', newline='\n') as f:
+                f.write(f"""
+
+# ============================================
+# OPENTELEMETRY CONFIGURATION
+# ============================================
+otel:
+  enabled: true
+  javaAgent:
+    version: "{OTEL_AGENT_VERSION}"
+  serviceName: "{service}"
+  endpoint: "http://otel-collector:4318"
+
+annotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "{port}"
+""")
+            log(f"✓ Updated Helm values: {service}")
+    else:
+        log(f"⚠️  Helm values not found: {service}")
+
+# Done
+log("\n" + "=" * 70)
+log("✓ COMPLETED!")
+log("=" * 70)
+
+print(f"""
+NEXT STEPS:
+
+1. Review changes:
+   cd {INFRA_REPO}
+   git status
+
+2. Commit & push:
+   git add .
+   git commit -m "feat: add observability stack"
+   git push origin {GIT_BRANCH}
+
+3. Install Istio (if not done):
+   # Download: https://github.com/istio/istio/releases/download/1.20.2/istio-1.20.2-win.zip
+   istioctl install --set profile=demo -y
+   kubectl label namespace {NAMESPACE} istio-injection=enabled --overwrite
+
+4. Wait for ArgoCD sync (5 min):
+   kubectl get pods -n {NAMESPACE} -w
+
+5. Access tools:
+   kubectl port-forward -n {NAMESPACE} svc/jaeger-query 16686:16686
+   kubectl port-forward -n {NAMESPACE} svc/grafana 3000:3000
+
+6. Test & view traces:
+   minikube tunnel
+   curl http://$(kubectl get svc -n istio-system istio-ingressgateway -o jsonpath='{{.status.loadBalancer.ingress[0].ip}}')/api/products
+""")
+```
+
 ### FILE: project_dump.txt
 ```
 
+```
+
+### FILE: voult.py
+```
+#!/usr/bin/env python3
+"""
+LeninKart HashiCorp Vault Integration
+======================================
+Implements secure secrets management using HashiCorp Vault
+
+Features:
+- Vault deployment in Kubernetes
+- External Secrets Operator (ESO) integration
+- Database credentials management
+- Kafka credentials
+- Application secrets
+- Auto-rotation capabilities
+"""
+
+import os
+from pathlib import Path
+
+# ============================================
+# Configuration
+# ============================================
+
+INFRA_REPO = Path(r"C:\Projects\infra\leninkart-infra")
+NAMESPACE = "dev"
+VAULT_NAMESPACE = "vault"
+VAULT_VERSION = "1.15.4"
+ESO_VERSION = "0.9.11"
+
+# ============================================
+# Helper Functions
+# ============================================
+
+def log(msg):
+    print(f"[VAULT] {msg}")
+
+def write_file(path, content):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
+        f.write(content)
+    log(f"✓ {path}")
+
+# ============================================
+# 1. Vault Server Deployment
+# ============================================
+
+log("=" * 70)
+log("Creating HashiCorp Vault Configuration")
+log("=" * 70)
+
+vault_dir = INFRA_REPO / "k8s" / "vault"
+
+# Namespace
+write_file(vault_dir / "00-namespace.yaml", f"""apiVersion: v1
+kind: Namespace
+metadata:
+  name: {VAULT_NAMESPACE}
+""")
+
+# Service Account
+write_file(vault_dir / "01-serviceaccount.yaml", f"""apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault
+  namespace: {VAULT_NAMESPACE}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vault-server-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: vault
+    namespace: {VAULT_NAMESPACE}
+""")
+
+# ConfigMap for Vault configuration
+write_file(vault_dir / "02-configmap.yaml", f"""apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-config
+  namespace: {VAULT_NAMESPACE}
+data:
+  vault-config.hcl: |
+    ui = true
+    
+    listener "tcp" {{
+      address = "0.0.0.0:8200"
+      tls_disable = 1
+    }}
+    
+    storage "file" {{
+      path = "/vault/data"
+    }}
+    
+    # Development mode - for production use proper storage backend
+    disable_mlock = true
+""")
+
+# StatefulSet
+write_file(vault_dir / "03-statefulset.yaml", f"""apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vault
+  namespace: {VAULT_NAMESPACE}
+  labels:
+    app: vault
+spec:
+  serviceName: vault
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vault
+  template:
+    metadata:
+      labels:
+        app: vault
+    spec:
+      serviceAccountName: vault
+      containers:
+        - name: vault
+          image: hashicorp/vault:{VAULT_VERSION}
+          args:
+            - "server"
+            - "-config=/vault/config/vault-config.hcl"
+          env:
+            - name: VAULT_ADDR
+              value: "http://127.0.0.1:8200"
+            - name: VAULT_API_ADDR
+              value: "http://vault.{VAULT_NAMESPACE}.svc.cluster.local:8200"
+            - name: SKIP_CHOWN
+              value: "true"
+            - name: SKIP_SETCAP
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8200
+              protocol: TCP
+            - name: cluster
+              containerPort: 8201
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /vault/config
+            - name: data
+              mountPath: /vault/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /v1/sys/health?standbyok=true
+              port: 8200
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /v1/sys/health?standbyok=true&uninitcode=204
+              port: 8200
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: vault-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+""")
+
+# Service
+write_file(vault_dir / "04-service.yaml", f"""apiVersion: v1
+kind: Service
+metadata:
+  name: vault
+  namespace: {VAULT_NAMESPACE}
+  labels:
+    app: vault
+spec:
+  type: ClusterIP
+  selector:
+    app: vault
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+    - name: cluster
+      port: 8201
+      targetPort: 8201
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault-ui
+  namespace: {VAULT_NAMESPACE}
+  labels:
+    app: vault
+spec:
+  type: ClusterIP
+  selector:
+    app: vault
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+""")
+
+# Vault initialization script
+write_file(vault_dir / "05-init-job.yaml", f"""apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-init
+  namespace: {VAULT_NAMESPACE}
+spec:
+  template:
+    metadata:
+      labels:
+        app: vault-init
+    spec:
+      serviceAccountName: vault
+      restartPolicy: OnFailure
+      containers:
+        - name: vault-init
+          image: hashicorp/vault:{VAULT_VERSION}
+          env:
+            - name: VAULT_ADDR
+              value: "http://vault.{VAULT_NAMESPACE}.svc.cluster.local:8200"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Waiting for Vault to be ready..."
+              sleep 10
+              
+              # Check if Vault is already initialized
+              if vault status 2>&1 | grep -q "Vault is sealed"; then
+                echo "Vault is already initialized"
+                exit 0
+              fi
+              
+              # Initialize Vault
+              echo "Initializing Vault..."
+              vault operator init -key-shares=1 -key-threshold=1 -format=json > /tmp/vault-keys.json
+              
+              # Extract unseal key and root token
+              UNSEAL_KEY=$(cat /tmp/vault-keys.json | grep -o '"unseal_keys_b64":\\[\"[^\"]*\"\\]' | cut -d'"' -f4)
+              ROOT_TOKEN=$(cat /tmp/vault-keys.json | grep -o '"root_token":"[^"]*"' | cut -d'"' -f4)
+              
+              # Unseal Vault
+              echo "Unsealing Vault..."
+              vault operator unseal $UNSEAL_KEY
+              
+              # Login with root token
+              vault login $ROOT_TOKEN
+              
+              # Enable KV secrets engine
+              vault secrets enable -version=2 -path=secret kv
+              
+              # Enable Kubernetes auth
+              vault auth enable kubernetes
+              
+              # Configure Kubernetes auth
+              vault write auth/kubernetes/config \\
+                kubernetes_host="https://kubernetes.default.svc:443"
+              
+              echo "Vault initialization complete!"
+              echo "Root Token: $ROOT_TOKEN"
+              echo "Unseal Key: $UNSEAL_KEY"
+              echo ""
+              echo "IMPORTANT: Save these credentials securely!"
+              echo "For dev environment, they're also in /tmp/vault-keys.json"
+""")
+
+# ============================================
+# 2. External Secrets Operator (ESO)
+# ============================================
+
+log("\n2. External Secrets Operator...")
+eso_dir = INFRA_REPO / "k8s" / "external-secrets"
+
+# ESO Installation via Helm values (for ArgoCD)
+write_file(eso_dir / "external-secrets-values.yaml", f"""# External Secrets Operator Helm Values
+installCRDs: true
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+webhook:
+  create: true
+
+certController:
+  create: true
+""")
+
+# SecretStore for Vault
+write_file(eso_dir / "secretstore.yaml", f"""apiVersion: external-secrets.io/v1beta1
+kind: SecretStore
+metadata:
+  name: vault-backend
+  namespace: {NAMESPACE}
+spec:
+  provider:
+    vault:
+      server: "http://vault.{VAULT_NAMESPACE}.svc.cluster.local:8200"
+      path: "secret"
+      version: "v2"
+      auth:
+        kubernetes:
+          mountPath: "kubernetes"
+          role: "leninkart-role"
+          serviceAccountRef:
+            name: vault-auth
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault-auth
+  namespace: {NAMESPACE}
+""")
+
+# ============================================
+# 3. Vault Policies & Roles
+# ============================================
+
+log("\n3. Vault Policies & Roles...")
+vault_config_dir = INFRA_REPO / "k8s" / "vault" / "policies"
+
+# Policy for LeninKart services
+write_file(vault_config_dir / "leninkart-policy.hcl", """# LeninKart Application Policy
+path "secret/data/leninkart/*" {
+  capabilities = ["read", "list"]
+}
+
+path "secret/metadata/leninkart/*" {
+  capabilities = ["read", "list"]
+}
+
+path "database/creds/leninkart-*" {
+  capabilities = ["read"]
+}
+""")
+
+# Kubernetes role configuration script
+write_file(vault_config_dir / "setup-k8s-auth.sh", f"""#!/bin/bash
+# Script to configure Vault Kubernetes authentication
+
+export VAULT_ADDR="http://localhost:8200"
+export VAULT_TOKEN="<ROOT_TOKEN>"  # Replace with actual root token
+
+# Create policy
+vault policy write leninkart-policy /vault/policies/leninkart-policy.hcl
+
+# Create Kubernetes role
+vault write auth/kubernetes/role/leninkart-role \\
+  bound_service_account_names=vault-auth \\
+  bound_service_account_namespaces={NAMESPACE} \\
+  policies=leninkart-policy \\
+  ttl=24h
+  
+# Enable database secrets engine
+vault secrets enable database
+
+# Configure PostgreSQL dynamic secrets
+vault write database/config/leninkart-postgres \\
+  plugin_name=postgresql-database-plugin \\
+  allowed_roles="leninkart-*" \\
+  connection_url="postgresql://{{{{username}}}}:{{{{password}}}}@postgres.{NAMESPACE}.svc.cluster.local:5432/leninkart?sslmode=disable" \\
+  username="postgres" \\
+  password="postgres"
+
+# Create database role for product-service
+vault write database/roles/leninkart-product \\
+  db_name=leninkart-postgres \\
+  creation_statements="CREATE ROLE \\"{{{{name}}\}}" WITH LOGIN PASSWORD '{{{{password}}}}' VALID UNTIL '{{{{expiration}}}}'; \\
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \\"{{{{name}}}}\\"; \\
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO \\"{{{{name}}\}}";" \\
+  default_ttl="1h" \\
+  max_ttl="24h"
+
+# Create database role for order-service
+vault write database/roles/leninkart-order \\
+  db_name=leninkart-postgres \\
+  creation_statements="CREATE ROLE \\"{{{{name}}\}}" WITH LOGIN PASSWORD '{{{{password}}}}' VALID UNTIL '{{{{expiration}}}}'; \\
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \\"{{{{name}}}}\\"; \\
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO \\"{{{{name}}\}}";" \\
+  default_ttl="1h" \\
+  max_ttl="24h"
+
+echo "Vault configuration complete!"
+""")
+
+# ============================================
+# 4. Application Secrets with External Secrets
+# ============================================
+
+log("\n4. Application Secrets Configuration...")
+secrets_dir = INFRA_REPO / "k8s" / "external-secrets" / "applications"
+
+# PostgreSQL credentials for Product Service
+write_file(secrets_dir / "product-service-db-secret.yaml", f"""apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: product-service-db-creds
+  namespace: {NAMESPACE}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  target:
+    name: product-service-db-secret
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      data:
+        SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres.{NAMESPACE}.svc.cluster.local:5432/leninkart"
+        SPRING_DATASOURCE_USERNAME: "{{{{ .username }}}}"
+        SPRING_DATASOURCE_PASSWORD: "{{{{ .password }}}}"
+  dataFrom:
+    - extract:
+        key: leninkart/product-service/database
+---
+# Static secret stored in Vault (for reference)
+# kubectl exec -n vault vault-0 -- vault kv put secret/leninkart/product-service/database \\
+#   username=product_user \\
+#   password=secure_password_here
+""")
+
+# PostgreSQL credentials for Order Service
+write_file(secrets_dir / "order-service-db-secret.yaml", f"""apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: order-service-db-creds
+  namespace: {NAMESPACE}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  target:
+    name: order-service-db-secret
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      data:
+        SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres.{NAMESPACE}.svc.cluster.local:5432/leninkart"
+        SPRING_DATASOURCE_USERNAME: "{{{{ .username }}}}"
+        SPRING_DATASOURCE_PASSWORD: "{{{{ .password }}}}"
+  dataFrom:
+    - extract:
+        key: leninkart/order-service/database
+""")
+
+# Kafka credentials
+write_file(secrets_dir / "kafka-credentials.yaml", f"""apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: kafka-creds
+  namespace: {NAMESPACE}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  target:
+    name: kafka-secret
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      data:
+        KAFKA_BOOTSTRAP_SERVERS: "kafka-0.kafka.{NAMESPACE}.svc.cluster.local:9092"
+        # Add SASL credentials when Kafka auth is enabled
+        # KAFKA_SASL_USERNAME: "{{{{ .username }}}}"
+        # KAFKA_SASL_PASSWORD: "{{{{ .password }}}}"
+  dataFrom:
+    - extract:
+        key: leninkart/kafka/credentials
+""")
+
+# Application configuration secrets
+write_file(secrets_dir / "app-config-secrets.yaml", f"""apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: product-service-config
+  namespace: {NAMESPACE}
+spec:
+  refreshInterval: 30m
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  target:
+    name: product-service-config-secret
+    creationPolicy: Owner
+  data:
+    - secretKey: JWT_SECRET
+      remoteRef:
+        key: leninkart/product-service/config
+        property: jwt_secret
+    - secretKey: API_KEY
+      remoteRef:
+        key: leninkart/product-service/config
+        property: api_key
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: order-service-config
+  namespace: {NAMESPACE}
+spec:
+  refreshInterval: 30m
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  target:
+    name: order-service-config-secret
+    creationPolicy: Owner
+  data:
+    - secretKey: JWT_SECRET
+      remoteRef:
+        key: leninkart/order-service/config
+        property: jwt_secret
+    - secretKey: API_KEY
+      remoteRef:
+        key: leninkart/order-service/config
+        property: api_key
+""")
+
+# ============================================
+# 5. Update Helm Values for Secret Integration
+# ============================================
+
+log("\n5. Updating Helm values for Vault integration...")
+
+# Note to add to Helm values
+vault_helm_note = """
+# ============================================
+# VAULT SECRETS INTEGRATION
+# ============================================
+# Secrets are now managed by HashiCorp Vault via External Secrets Operator
+# 
+# To enable Vault secrets in deployments, add envFrom to your deployment:
+#
+# envFrom:
+#   - secretRef:
+#       name: product-service-db-secret
+#   - secretRef:
+#       name: product-service-config-secret
+#
+# This replaces hardcoded environment variables with Vault-managed secrets
+
+secrets:
+  vault:
+    enabled: true
+    secretStore: vault-backend
+    refreshInterval: 1h
+"""
+
+product_values = INFRA_REPO / "helm" / "product-service" / "values-dev.yaml"
+if product_values.exists():
+    with open(product_values, 'a', newline='\n') as f:
+        f.write(vault_helm_note)
+    log(f"✓ Updated: product-service values")
+
+order_values = INFRA_REPO / "helm" / "order-service" / "values-dev.yaml"
+if order_values.exists():
+    with open(order_values, 'a', newline='\n') as f:
+        f.write(vault_helm_note)
+    log(f"✓ Updated: order-service values")
+
+# ============================================
+# 6. ArgoCD Applications for Vault Stack
+# ============================================
+
+log("\n6. Creating ArgoCD Applications...")
+argocd_dir = INFRA_REPO / "argocd" / "applications" / NAMESPACE
+
+write_file(argocd_dir / "vault.yaml", f"""apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault-{NAMESPACE}
+  namespace: argocd
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: k8s/vault
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {VAULT_NAMESPACE}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+""")
+
+write_file(argocd_dir / "external-secrets-operator.yaml", f"""apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-secrets-operator
+  namespace: argocd
+spec:
+  project: leninkart
+  source:
+    repoURL: https://charts.external-secrets.io
+    chart: external-secrets
+    targetRevision: {ESO_VERSION}
+    helm:
+      valuesObject:
+        installCRDs: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: external-secrets-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+""")
+
+write_file(argocd_dir / "vault-secretstores.yaml", f"""apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault-secretstores-{NAMESPACE}
+  namespace: argocd
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: k8s/external-secrets
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {NAMESPACE}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+""")
+
+# ============================================
+# 7. Documentation
+# ============================================
+
+log("\n7. Creating documentation...")
+docs_dir = INFRA_REPO / "docs"
+
+write_file(docs_dir / "VAULT_SETUP.md", f"""# HashiCorp Vault Setup Guide
+
+## Overview
+
+This guide explains how to set up and use HashiCorp Vault for secrets management in LeninKart.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────┐
+│         Applications ({NAMESPACE})       │
+│  ┌─────────────┐    ┌─────────────┐    │
+│  │ Product Svc │    │ Order Svc   │    │
+│  │  (reads)    │    │  (reads)    │    │
+│  └──────┬──────┘    └──────┬──────┘    │
+│         │                   │            │
+│         └────────┬──────────┘            │
+└──────────────────┼───────────────────────┘
+                   │
+          ┌────────▼─────────┐
+          │ External Secrets │
+          │    Operator      │
+          └────────┬─────────┘
+                   │
+          ┌────────▼─────────┐
+          │  HashiCorp Vault │
+          │   ({VAULT_NAMESPACE})       │
+          └──────────────────┘
+```
+
+## Initial Setup
+
+### 1. Deploy Vault
+
+Vault is deployed automatically via ArgoCD. Check status:
+
+```bash
+kubectl get pods -n {VAULT_NAMESPACE}
+kubectl logs -n {VAULT_NAMESPACE} vault-0
+```
+
+### 2. Initialize and Unseal Vault
+
+**Important:** This is a one-time operation!
+
+```bash
+# Port-forward to Vault
+kubectl port-forward -n {VAULT_NAMESPACE} svc/vault 8200:8200
+
+# In another terminal, initialize Vault
+export VAULT_ADDR='http://127.0.0.1:8200'
+vault operator init -key-shares=1 -key-threshold=1
+
+# Save the unseal key and root token!
+# UNSEAL_KEY=...
+# ROOT_TOKEN=...
+
+# Unseal Vault
+vault operator unseal <UNSEAL_KEY>
+
+# Login
+vault login <ROOT_TOKEN>
+```
+
+### 3. Configure Vault
+
+```bash
+# Enable KV secrets engine
+vault secrets enable -version=2 -path=secret kv
+
+# Enable Kubernetes authentication
+vault auth enable kubernetes
+
+# Get Kubernetes service account JWT
+SA_JWT=$(kubectl get secret -n {NAMESPACE} \\
+  $(kubectl get sa vault-auth -n {NAMESPACE} -o jsonpath='{{.secrets[0].name}}') \\
+  -o jsonpath='{{.data.token}}' | base64 -d)
+
+K8S_HOST=$(kubectl config view --raw --minify --flatten \\
+  -o jsonpath='{{.clusters[0].cluster.server}}')
+
+# Configure Kubernetes auth
+vault write auth/kubernetes/config \\
+  kubernetes_host="$K8S_HOST" \\
+  kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+```
+
+### 4. Create Policies and Roles
+
+```bash
+# Create policy
+vault policy write leninkart-policy - <<EOF
+path "secret/data/leninkart/*" {{
+  capabilities = ["read", "list"]
+}}
+EOF
+
+# Create Kubernetes role
+vault write auth/kubernetes/role/leninkart-role \\
+  bound_service_account_names=vault-auth \\
+  bound_service_account_namespaces={NAMESPACE} \\
+  policies=leninkart-policy \\
+  ttl=24h
+```
+
+### 5. Store Secrets
+
+```bash
+# Database credentials
+vault kv put secret/leninkart/product-service/database \\
+  username=product_user \\
+  password=your_secure_password_here
+
+vault kv put secret/leninkart/order-service/database \\
+  username=order_user \\
+  password=your_secure_password_here
+
+# Kafka credentials
+vault kv put secret/leninkart/kafka/credentials \\
+  username=kafka_user \\
+  password=kafka_password
+
+# Application configuration
+vault kv put secret/leninkart/product-service/config \\
+  jwt_secret=your_jwt_secret \\
+  api_key=your_api_key
+
+vault kv put secret/leninkart/order-service/config \\
+  jwt_secret=your_jwt_secret \\
+  api_key=your_api_key
+```
+
+## Using Secrets in Applications
+
+### External Secrets Operator
+
+ESO automatically syncs secrets from Vault to Kubernetes Secrets.
+
+Check sync status:
+```bash
+kubectl get externalsecrets -n {NAMESPACE}
+kubectl describe externalsecret product-service-db-creds -n {NAMESPACE}
+```
+
+### In Helm Charts
+
+Update your deployment to use secrets:
+
+```yaml
+spec:
+  containers:
+    - name: app
+      envFrom:
+        - secretRef:
+            name: product-service-db-secret
+        - secretRef:
+            name: product-service-config-secret
+```
+
+## Dynamic Database Credentials
+
+Enable dynamic credentials (optional, advanced):
+
+```bash
+# Enable database secrets engine
+vault secrets enable database
+
+# Configure PostgreSQL
+vault write database/config/leninkart-postgres \\
+  plugin_name=postgresql-database-plugin \\
+  connection_url="postgresql://{{{{username}}}}:{{{{password}}}}@postgres.{NAMESPACE}.svc.cluster.local:5432/leninkart" \\
+  username="postgres" \\
+  password="postgres"
+
+# Create role
+vault write database/roles/leninkart-app \\
+  db_name=leninkart-postgres \\
+  creation_statements="CREATE ROLE \\"{{{{name}}\}}" WITH LOGIN PASSWORD '{{{{password}}}}' VALID UNTIL '{{{{expiration}}}}'; \\
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \\"{{{{name}}\}}";" \\
+  default_ttl="1h" \\
+  max_ttl="24h"
+
+# Get dynamic credentials
+vault read database/creds/leninkart-app
+```
+
+## Secret Rotation
+
+### Manual Rotation
+```bash
+# Update secret in Vault
+vault kv put secret/leninkart/product-service/database \\
+  username=new_user \\
+  password=new_password
+
+# ESO will automatically sync within refreshInterval (default: 1h)
+# Force immediate sync:
+kubectl annotate externalsecret product-service-db-creds \\
+  force-sync="$(date +%s)" -n {NAMESPACE}
+```
+
+### Automatic Rotation
+Configure in ExternalSecret:
+```yaml
+spec:
+  refreshInterval: 15m  # Sync every 15 minutes
+```
+
+## Troubleshooting
+
+### Vault Pod Not Starting
+```bash
+kubectl logs -n {VAULT_NAMESPACE} vault-0
+kubectl describe pod -n {VAULT_NAMESPACE} vault-0
+```
+
+### Vault is Sealed
+```bash
+kubectl exec -n {VAULT_NAMESPACE} vault-0 -- vault status
+kubectl exec -n {VAULT_NAMESPACE} vault-0 -- vault operator unseal <KEY>
+```
+
+### ExternalSecret Not Syncing
+```bash
+kubectl get externalsecret -n {NAMESPACE}
+kubectl describe externalsecret <name> -n {NAMESPACE}
+kubectl logs -n external-secrets-system -l app.kubernetes.io/name=external-secrets
+```
+
+### Secret Not Available in Pod
+```bash
+kubectl get secret -n {NAMESPACE}
+kubectl describe secret product-service-db-secret -n {NAMESPACE}
+kubectl get externalsecret product-service-db-creds -n {NAMESPACE} -o yaml
+```
+
+## Security Best Practices
+
+1. **Never commit Vault tokens or unseal keys to Git**
+2. **Use strong passwords for all secrets**
+3. **Enable audit logging in production**
+4. **Use proper storage backend in production (Consul, etc.)**
+5. **Implement secret rotation policies**
+6. **Restrict Vault policies to least privilege**
+7. **Enable mTLS for Vault in production**
+
+## Production Considerations
+
+### High Availability
+- Deploy 3+ Vault instances
+- Use Consul or Raft for storage
+- Configure auto-unseal with cloud KMS
+
+### Backup
+```bash
+# Backup Vault data
+vault operator raft snapshot save backup.snap
+```
+
+### Monitoring
+- Enable audit logging
+- Monitor seal status
+- Track secret access patterns
+
+## Access Vault UI
+
+```bash
+kubectl port-forward -n {VAULT_NAMESPACE} svc/vault-ui 8200:8200
+```
+Open: http://localhost:8200
+
+## References
+
+- [Vault Documentation](https://www.vaultproject.io/docs)
+- [External Secrets Operator](https://external-secrets.io/)
+- [Kubernetes Auth Method](https://www.vaultproject.io/docs/auth/kubernetes)
+""")
+
+# Quick start script
+write_file(INFRA_REPO / "scripts" / "vault-quickstart.sh", f"""#!/bin/bash
+# Vault Quick Start Script
+
+set -e
+
+echo "==================================================================="
+echo "LeninKart Vault Quick Start"
+echo "==================================================================="
+
+# Check if Vault is running
+echo "1. Checking Vault status..."
+kubectl wait --for=condition=ready pod -l app=vault -n {VAULT_NAMESPACE} --timeout=120s
+
+# Port forward
+echo "2. Setting up port-forward..."
+kubectl port-forward -n {VAULT_NAMESPACE} svc/vault 8200:8200 &
+PF_PID=$!
+sleep 3
+
+export VAULT_ADDR='http://127.0.0.1:8200'
+
+# Check if initialized
+if vault status 2>&1 | grep -q "Vault is not initialized"; then
+  echo "3. Initializing Vault..."
+  vault operator init -key-shares=1 -key-threshold=1 -format=json > vault-keys.json
+  
+  UNSEAL_KEY=$(cat vault-keys.json | jq -r '.unseal_keys_b64[0]')
+  ROOT_TOKEN=$(cat vault-keys.json | jq -r '.root_token')
+  
+  echo "4. Unsealing Vault..."
+  vault operator unseal $UNSEAL_KEY
+  
+  echo "5. Logging in..."
+  vault login $ROOT_TOKEN
+  
+  echo ""
+  echo "==================================================================="
+  echo "IMPORTANT: Save these credentials!"
+  echo "==================================================================="
+  echo "Root Token: $ROOT_TOKEN"
+  echo "Unseal Key: $UNSEAL_KEY"
+  echo ""
+  echo "Credentials also saved in: vault-keys.json"
+  echo "==================================================================="
+else
+  echo "Vault already initialized"
+fi
+
+# Clean up
+kill $PF_PID 2>/dev/null || true
+
+echo ""
+echo "✓ Vault setup complete!"
+echo "Next steps:"
+echo "  1. Configure Kubernetes auth: kubectl exec -n {VAULT_NAMESPACE} vault-0 -- /vault/policies/setup-k8s-auth.sh"
+echo "  2. Store secrets: vault kv put secret/leninkart/..."
+echo "  3. Check ExternalSecrets: kubectl get externalsecrets -n {NAMESPACE}"
+""")
+
+# ============================================
+# Done
+# ============================================
+
+log("\n" + "=" * 70)
+log("✓ VAULT CONFIGURATION COMPLETED!")
+log("=" * 70)
+
+print(f"""
+VAULT INTEGRATION SUMMARY:
+
+Created Files:
+1. Vault StatefulSet & Services ({VAULT_NAMESPACE} namespace)
+2. External Secrets Operator configuration
+3. SecretStore for Vault backend
+4. ExternalSecret definitions for all services
+5. Vault policies and Kubernetes auth setup
+6. ArgoCD applications for Vault stack
+7. Documentation and quick-start scripts
+
+NEXT STEPS:
+
+1. Review changes:
+   cd {INFRA_REPO}
+   git status
+
+2. Commit and push:
+   git add .
+   git commit -m "feat: add HashiCorp Vault secrets management"
+   git push origin dev
+
+3. Wait for ArgoCD to deploy Vault:
+   kubectl get pods -n {VAULT_NAMESPACE} -w
+
+4. Initialize Vault (ONE TIME):
+   bash scripts/vault-quickstart.sh
+   
+   OR manually:
+   kubectl port-forward -n {VAULT_NAMESPACE} svc/vault 8200:8200
+   export VAULT_ADDR='http://127.0.0.1:8200'
+   vault operator init
+   vault operator unseal <KEY>
+   vault login <TOKEN>
+
+5. Configure Vault:
+   kubectl exec -n {VAULT_NAMESPACE} vault-0 -- sh /vault/policies/setup-k8s-auth.sh
+
+6. Store secrets:
+   vault kv put secret/leninkart/product-service/database username=user password=pass
+   vault kv put secret/leninkart/order-service/database username=user password=pass
+
+7. Verify External Secrets sync:
+   kubectl get externalsecrets -n {NAMESPACE}
+   kubectl get secrets -n {NAMESPACE}
+
+8. Access Vault UI:
+   kubectl port-forward -n {VAULT_NAMESPACE} svc/vault-ui 8200:8200
+   # Open: http://localhost:8200
+
+IMPORTANT SECURITY NOTES:
+
+⚠️  SAVE VAULT UNSEAL KEYS AND ROOT TOKEN SECURELY!
+⚠️  Never commit credentials to Git
+⚠️  Rotate secrets regularly
+⚠️  Use proper storage backend in production (not file storage)
+⚠️  Enable audit logging for compliance
+
+Read full documentation: docs/VAULT_SETUP.md
+""")
 ```
 
 ### DIRECTORY: argocd/
@@ -665,12 +2394,19 @@ spec:
 
   sourceRepos:
     - https://charts.bitnami.com/bitnami
+    - https://charts.external-secrets.io
     - https://github.com/Leninfitfreak/*
 
   destinations:
     - namespace: dev
       server: https://kubernetes.default.svc
     - namespace: argocd
+      server: https://kubernetes.default.svc
+    - namespace: external-secrets-system
+      server: https://kubernetes.default.svc
+    - namespace: vault
+      server: https://kubernetes.default.svc
+    - namespace: istio-system
       server: https://kubernetes.default.svc
 
   clusterResourceWhitelist:
@@ -685,6 +2421,37 @@ spec:
 ### DIRECTORY: argocd\applications/
 
 ### DIRECTORY: argocd\applications\dev/
+
+### FILE: argocd\applications\dev\external-secrets-operator.yaml
+```
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-secrets-operator
+  namespace: argocd
+spec:
+  project: leninkart
+  source:
+    repoURL: https://charts.external-secrets.io
+    chart: external-secrets
+    targetRevision: 0.9.11
+    helm:
+      valuesObject:
+        installCRDs: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: external-secrets-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+```
 
 ### FILE: argocd\applications\dev\frontend.yaml
 ```
@@ -713,6 +2480,28 @@ spec:
       - CreateNamespace=true
 ```
 
+### FILE: argocd\applications\dev\grafana.yaml
+```
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grafana-dev
+  namespace: argocd
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: k8s/grafana
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
 ### FILE: argocd\applications\dev\ingress.yaml
 ```
 apiVersion: argoproj.io/v1alpha1
@@ -729,6 +2518,50 @@ spec:
     helm:
       valueFiles:
         - values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
+### FILE: argocd\applications\dev\istio-config.yaml
+```
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-config-dev
+  namespace: argocd
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: k8s/istio
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
+### FILE: argocd\applications\dev\jaeger.yaml
+```
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: jaeger-dev
+  namespace: argocd
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: k8s/jaeger
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
@@ -787,6 +2620,28 @@ spec:
       - CreateNamespace=true
 ```
 
+### FILE: argocd\applications\dev\otel-collector.yaml
+```
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: otel-collector-dev
+  namespace: argocd
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: k8s/otel
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
 ### FILE: argocd\applications\dev\postgres.yaml
 ```
 apiVersion: argoproj.io/v1alpha1
@@ -833,6 +2688,74 @@ spec:
     server: https://kubernetes.default.svc
     namespace: dev
 
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+```
+
+### FILE: argocd\applications\dev\prometheus.yaml
+```
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus-dev
+  namespace: argocd
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: k8s/prometheus
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
+### FILE: argocd\applications\dev\vault-secretstores.yaml
+```
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault-secretstores-dev
+  namespace: argocd
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: k8s/external-secrets
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
+### FILE: argocd\applications\dev\vault.yaml
+```
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault-dev
+  namespace: argocd
+spec:
+  project: leninkart
+  source:
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: dev
+    path: k8s/vault
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vault
   syncPolicy:
     automated:
       prune: true
@@ -975,6 +2898,288 @@ spec:
     automated:
       prune: true
       selfHeal: true
+```
+
+### DIRECTORY: docs/
+
+### FILE: docs\VAULT_SETUP.md
+```
+# HashiCorp Vault Setup Guide
+
+## Overview
+
+This guide explains how to set up and use HashiCorp Vault for secrets management in LeninKart.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────┐
+│         Applications (dev)       │
+│  ┌─────────────┐    ┌─────────────┐    │
+│  │ Product Svc │    │ Order Svc   │    │
+│  │  (reads)    │    │  (reads)    │    │
+│  └──────┬──────┘    └──────┬──────┘    │
+│         │                   │            │
+│         └────────┬──────────┘            │
+└──────────────────┼───────────────────────┘
+                   │
+          ┌────────▼─────────┐
+          │ External Secrets │
+          │    Operator      │
+          └────────┬─────────┘
+                   │
+          ┌────────▼─────────┐
+          │  HashiCorp Vault │
+          │   (vault)       │
+          └──────────────────┘
+```
+
+## Initial Setup
+
+### 1. Deploy Vault
+
+Vault is deployed automatically via ArgoCD. Check status:
+
+```bash
+kubectl get pods -n vault
+kubectl logs -n vault vault-0
+```
+
+### 2. Initialize and Unseal Vault
+
+**Important:** This is a one-time operation!
+
+```bash
+# Port-forward to Vault
+kubectl port-forward -n vault svc/vault 8200:8200
+
+# In another terminal, initialize Vault
+export VAULT_ADDR='http://127.0.0.1:8200'
+vault operator init -key-shares=1 -key-threshold=1
+
+# Save the unseal key and root token!
+# UNSEAL_KEY=...
+# ROOT_TOKEN=...
+
+# Unseal Vault
+vault operator unseal <UNSEAL_KEY>
+
+# Login
+vault login <ROOT_TOKEN>
+```
+
+### 3. Configure Vault
+
+```bash
+# Enable KV secrets engine
+vault secrets enable -version=2 -path=secret kv
+
+# Enable Kubernetes authentication
+vault auth enable kubernetes
+
+# Get Kubernetes service account JWT
+SA_JWT=$(kubectl get secret -n dev \
+  $(kubectl get sa vault-auth -n dev -o jsonpath='{.secrets[0].name}') \
+  -o jsonpath='{.data.token}' | base64 -d)
+
+K8S_HOST=$(kubectl config view --raw --minify --flatten \
+  -o jsonpath='{.clusters[0].cluster.server}')
+
+# Configure Kubernetes auth
+vault write auth/kubernetes/config \
+  kubernetes_host="$K8S_HOST" \
+  kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+```
+
+### 4. Create Policies and Roles
+
+```bash
+# Create policy
+vault policy write leninkart-policy - <<EOF
+path "secret/data/leninkart/*" {
+  capabilities = ["read", "list"]
+}
+EOF
+
+# Create Kubernetes role
+vault write auth/kubernetes/role/leninkart-role \
+  bound_service_account_names=vault-auth \
+  bound_service_account_namespaces=dev \
+  policies=leninkart-policy \
+  ttl=24h
+```
+
+### 5. Store Secrets
+
+```bash
+# Database credentials
+vault kv put secret/leninkart/product-service/database \
+  username=product_user \
+  password=your_secure_password_here
+
+vault kv put secret/leninkart/order-service/database \
+  username=order_user \
+  password=your_secure_password_here
+
+# Kafka credentials
+vault kv put secret/leninkart/kafka/credentials \
+  username=kafka_user \
+  password=kafka_password
+
+# Application configuration
+vault kv put secret/leninkart/product-service/config \
+  jwt_secret=your_jwt_secret \
+  api_key=your_api_key
+
+vault kv put secret/leninkart/order-service/config \
+  jwt_secret=your_jwt_secret \
+  api_key=your_api_key
+```
+
+## Using Secrets in Applications
+
+### External Secrets Operator
+
+ESO automatically syncs secrets from Vault to Kubernetes Secrets.
+
+Check sync status:
+```bash
+kubectl get externalsecrets -n dev
+kubectl describe externalsecret product-service-db-creds -n dev
+```
+
+### In Helm Charts
+
+Update your deployment to use secrets:
+
+```yaml
+spec:
+  containers:
+    - name: app
+      envFrom:
+        - secretRef:
+            name: product-service-db-secret
+        - secretRef:
+            name: product-service-config-secret
+```
+
+## Dynamic Database Credentials
+
+Enable dynamic credentials (optional, advanced):
+
+```bash
+# Enable database secrets engine
+vault secrets enable database
+
+# Configure PostgreSQL
+vault write database/config/leninkart-postgres \
+  plugin_name=postgresql-database-plugin \
+  connection_url="postgresql://{{username}}:{{password}}@postgres.dev.svc.cluster.local:5432/leninkart" \
+  username="postgres" \
+  password="postgres"
+
+# Create role
+vault write database/roles/leninkart-app \
+  db_name=leninkart-postgres \
+  creation_statements="CREATE ROLE \"{{name}\}" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}'; \
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \"{{name}\}";" \
+  default_ttl="1h" \
+  max_ttl="24h"
+
+# Get dynamic credentials
+vault read database/creds/leninkart-app
+```
+
+## Secret Rotation
+
+### Manual Rotation
+```bash
+# Update secret in Vault
+vault kv put secret/leninkart/product-service/database \
+  username=new_user \
+  password=new_password
+
+# ESO will automatically sync within refreshInterval (default: 1h)
+# Force immediate sync:
+kubectl annotate externalsecret product-service-db-creds \
+  force-sync="$(date +%s)" -n dev
+```
+
+### Automatic Rotation
+Configure in ExternalSecret:
+```yaml
+spec:
+  refreshInterval: 15m  # Sync every 15 minutes
+```
+
+## Troubleshooting
+
+### Vault Pod Not Starting
+```bash
+kubectl logs -n vault vault-0
+kubectl describe pod -n vault vault-0
+```
+
+### Vault is Sealed
+```bash
+kubectl exec -n vault vault-0 -- vault status
+kubectl exec -n vault vault-0 -- vault operator unseal <KEY>
+```
+
+### ExternalSecret Not Syncing
+```bash
+kubectl get externalsecret -n dev
+kubectl describe externalsecret <name> -n dev
+kubectl logs -n external-secrets-system -l app.kubernetes.io/name=external-secrets
+```
+
+### Secret Not Available in Pod
+```bash
+kubectl get secret -n dev
+kubectl describe secret product-service-db-secret -n dev
+kubectl get externalsecret product-service-db-creds -n dev -o yaml
+```
+
+## Security Best Practices
+
+1. **Never commit Vault tokens or unseal keys to Git**
+2. **Use strong passwords for all secrets**
+3. **Enable audit logging in production**
+4. **Use proper storage backend in production (Consul, etc.)**
+5. **Implement secret rotation policies**
+6. **Restrict Vault policies to least privilege**
+7. **Enable mTLS for Vault in production**
+
+## Production Considerations
+
+### High Availability
+- Deploy 3+ Vault instances
+- Use Consul or Raft for storage
+- Configure auto-unseal with cloud KMS
+
+### Backup
+```bash
+# Backup Vault data
+vault operator raft snapshot save backup.snap
+```
+
+### Monitoring
+- Enable audit logging
+- Monitor seal status
+- Track secret access patterns
+
+## Access Vault UI
+
+```bash
+kubectl port-forward -n vault svc/vault-ui 8200:8200
+```
+Open: http://localhost:8200
+
+## References
+
+- [Vault Documentation](https://www.vaultproject.io/docs)
+- [External Secrets Operator](https://external-secrets.io/)
+- [Kubernetes Auth Method](https://www.vaultproject.io/docs/auth/kubernetes)
 ```
 
 ### DIRECTORY: helm/
@@ -1276,6 +3481,42 @@ env:
   SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-0.kafka.dev.svc.cluster.local:9092
   MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
   MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+
+
+# ============================================
+# OPENTELEMETRY CONFIGURATION
+# ============================================
+otel:
+  enabled: true
+  javaAgent:
+    version: "1.32.0"
+  serviceName: "order-service"
+  endpoint: "http://otel-collector:4318"
+
+annotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+
+# ============================================
+# VAULT SECRETS INTEGRATION
+# ============================================
+# Secrets are now managed by HashiCorp Vault via External Secrets Operator
+# 
+# To enable Vault secrets in deployments, add envFrom to your deployment:
+#
+# envFrom:
+#   - secretRef:
+#       name: product-service-db-secret
+#   - secretRef:
+#       name: product-service-config-secret
+#
+# This replaces hardcoded environment variables with Vault-managed secrets
+
+secrets:
+  vault:
+    enabled: true
+    secretStore: vault-backend
+    refreshInterval: 1h
 ```
 
 ### DIRECTORY: helm\order-service\templates/
@@ -1458,6 +3699,42 @@ env:
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
   SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: 'true'
   SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-0.kafka.dev.svc.cluster.local:9092
+
+
+# ============================================
+# OPENTELEMETRY CONFIGURATION
+# ============================================
+otel:
+  enabled: true
+  javaAgent:
+    version: "1.32.0"
+  serviceName: "product-service"
+  endpoint: "http://otel-collector:4318"
+
+annotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8081"
+
+# ============================================
+# VAULT SECRETS INTEGRATION
+# ============================================
+# Secrets are now managed by HashiCorp Vault via External Secrets Operator
+# 
+# To enable Vault secrets in deployments, add envFrom to your deployment:
+#
+# envFrom:
+#   - secretRef:
+#       name: product-service-db-secret
+#   - secretRef:
+#       name: product-service-config-secret
+#
+# This replaces hardcoded environment variables with Vault-managed secrets
+
+secrets:
+  vault:
+    enabled: true
+    secretStore: vault-backend
+    refreshInterval: 1h
 ```
 
 ### DIRECTORY: helm\product-service\templates/
@@ -1511,6 +3788,533 @@ spec:
 ```
 
 ### DIRECTORY: k8s/
+
+### DIRECTORY: k8s\external-secrets/
+
+### FILE: k8s\external-secrets\external-secrets-values.yaml
+```
+# External Secrets Operator Helm Values
+installCRDs: true
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+webhook:
+  create: true
+
+certController:
+  create: true
+```
+
+### FILE: k8s\external-secrets\secretstore.yaml
+```
+apiVersion: external-secrets.io/v1beta1
+kind: SecretStore
+metadata:
+  name: vault-backend
+  namespace: dev
+spec:
+  provider:
+    vault:
+      server: "http://vault.vault.svc.cluster.local:8200"
+      path: "secret"
+      version: "v2"
+      auth:
+        kubernetes:
+          mountPath: "kubernetes"
+          role: "leninkart-role"
+          serviceAccountRef:
+            name: vault-auth
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault-auth
+  namespace: dev
+```
+
+### DIRECTORY: k8s\external-secrets\applications/
+
+### FILE: k8s\external-secrets\applications\app-config-secrets.yaml
+```
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: product-service-config
+  namespace: dev
+spec:
+  refreshInterval: 30m
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  target:
+    name: product-service-config-secret
+    creationPolicy: Owner
+  data:
+    - secretKey: JWT_SECRET
+      remoteRef:
+        key: leninkart/product-service/config
+        property: jwt_secret
+    - secretKey: API_KEY
+      remoteRef:
+        key: leninkart/product-service/config
+        property: api_key
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: order-service-config
+  namespace: dev
+spec:
+  refreshInterval: 30m
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  target:
+    name: order-service-config-secret
+    creationPolicy: Owner
+  data:
+    - secretKey: JWT_SECRET
+      remoteRef:
+        key: leninkart/order-service/config
+        property: jwt_secret
+    - secretKey: API_KEY
+      remoteRef:
+        key: leninkart/order-service/config
+        property: api_key
+```
+
+### FILE: k8s\external-secrets\applications\kafka-credentials.yaml
+```
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: kafka-creds
+  namespace: dev
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  target:
+    name: kafka-secret
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      data:
+        KAFKA_BOOTSTRAP_SERVERS: "kafka-0.kafka.dev.svc.cluster.local:9092"
+        # Add SASL credentials when Kafka auth is enabled
+        # KAFKA_SASL_USERNAME: "{{ .username }}"
+        # KAFKA_SASL_PASSWORD: "{{ .password }}"
+  dataFrom:
+    - extract:
+        key: leninkart/kafka/credentials
+```
+
+### FILE: k8s\external-secrets\applications\order-service-db-secret.yaml
+```
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: order-service-db-creds
+  namespace: dev
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  target:
+    name: order-service-db-secret
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      data:
+        SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart"
+        SPRING_DATASOURCE_USERNAME: "{{ .username }}"
+        SPRING_DATASOURCE_PASSWORD: "{{ .password }}"
+  dataFrom:
+    - extract:
+        key: leninkart/order-service/database
+```
+
+### FILE: k8s\external-secrets\applications\product-service-db-secret.yaml
+```
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: product-service-db-creds
+  namespace: dev
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  target:
+    name: product-service-db-secret
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      data:
+        SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart"
+        SPRING_DATASOURCE_USERNAME: "{{ .username }}"
+        SPRING_DATASOURCE_PASSWORD: "{{ .password }}"
+  dataFrom:
+    - extract:
+        key: leninkart/product-service/database
+---
+# Static secret stored in Vault (for reference)
+# kubectl exec -n vault vault-0 -- vault kv put secret/leninkart/product-service/database \
+#   username=product_user \
+#   password=secure_password_here
+```
+
+### DIRECTORY: k8s\grafana/
+
+### FILE: k8s\grafana\grafana-datasources.yaml
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: dev
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus.dev.svc.cluster.local:9090
+        isDefault: true
+      - name: Jaeger
+        type: jaeger
+        url: http://jaeger-query.dev.svc.cluster.local:16686
+```
+
+### FILE: k8s\grafana\grafana-deployment.yaml
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:10.2.3
+          ports:
+            - containerPort: 3000
+          env:
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: "Admin"
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: dev
+spec:
+  selector:
+    app: grafana
+  ports:
+    - port: 3000
+```
+
+### FILE: k8s\grafana\grafana.yaml
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: dev
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus:9090
+        isDefault: true
+      - name: Jaeger
+        type: jaeger
+        url: http://jaeger-query:16686
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:10.2.3
+          ports:
+            - containerPort: 3000
+          env:
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: "Admin"
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: dev
+spec:
+  selector:
+    app: grafana
+  ports:
+    - port: 3000
+```
+
+### DIRECTORY: k8s\istio/
+
+### FILE: k8s\istio\gateway.yaml
+```
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: leninkart-gateway
+  namespace: dev
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*"
+```
+
+### FILE: k8s\istio\telemetry.yaml
+```
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: leninkart-telemetry
+  namespace: dev
+spec:
+  tracing:
+    - providers:
+        - name: zipkin
+      randomSamplingPercentage: 100.0
+```
+
+### FILE: k8s\istio\virtualservice.yaml
+```
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: leninkart-routes
+  namespace: dev
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - leninkart-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /api/products
+      route:
+        - destination:
+            host: leninkart-product-service
+            port:
+              number: 8081
+    - match:
+        - uri:
+            prefix: /api/orders
+      route:
+        - destination:
+            host: leninkart-order-service
+            port:
+              number: 8080
+    - match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: leninkart-frontend
+            port:
+              number: 80
+```
+
+### DIRECTORY: k8s\jaeger/
+
+### FILE: k8s\jaeger\jaeger-all-in-one.yaml
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: jaeger
+          image: jaegertracing/all-in-one:1.53
+          env:
+            - name: COLLECTOR_OTLP_ENABLED
+              value: "true"
+          ports:
+            - containerPort: 4317
+            - containerPort: 4318
+            - containerPort: 9411
+            - containerPort: 16686
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-collector
+  namespace: dev
+spec:
+  selector:
+    app: jaeger
+  ports:
+    - name: otlp-grpc
+      port: 4317
+    - name: otlp-http
+      port: 4318
+    - name: zipkin
+      port: 9411
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-query
+  namespace: dev
+spec:
+  selector:
+    app: jaeger
+  ports:
+    - name: ui
+      port: 16686
+```
+
+### FILE: k8s\jaeger\jaeger.yaml
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: jaeger
+          image: jaegertracing/all-in-one:1.53
+          env:
+            - name: COLLECTOR_OTLP_ENABLED
+              value: "true"
+          ports:
+            - containerPort: 4317
+            - containerPort: 16686
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-collector
+  namespace: dev
+spec:
+  selector:
+    app: jaeger
+  ports:
+    - name: otlp
+      port: 4317
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-query
+  namespace: dev
+spec:
+  selector:
+    app: jaeger
+  ports:
+    - name: ui
+      port: 16686
+```
 
 ### DIRECTORY: k8s\kafka/
 
@@ -1636,6 +4440,239 @@ spec:
             storage: 5Gi
 ```
 
+### DIRECTORY: k8s\otel/
+
+### FILE: k8s\otel\01-configmap.yaml
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: dev
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+      zipkin:
+        endpoint: 0.0.0.0:9411
+    processors:
+      batch: {}
+      memory_limiter:
+        limit_mib: 512
+    exporters:
+      otlp/jaeger:
+        endpoint: jaeger-collector:4317
+        tls:
+          insecure: true
+      prometheus:
+        endpoint: 0.0.0.0:8889
+      logging: {}
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp, zipkin]
+          processors: [batch]
+          exporters: [otlp/jaeger, logging]
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [prometheus]
+```
+
+### FILE: k8s\otel\02-deployment.yaml
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.92.0
+          args: ["--config=/conf/config.yaml"]
+          ports:
+            - containerPort: 4317
+            - containerPort: 4318
+            - containerPort: 9411
+            - containerPort: 8889
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: dev
+spec:
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+    - name: otlp-http
+      port: 4318
+    - name: zipkin
+      port: 9411
+    - name: metrics
+      port: 8889
+```
+
+### FILE: k8s\otel\collector-configmap.yaml
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: dev
+  labels:
+    app: otel-collector
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+            cors:
+              allowed_origins:
+                - "*"
+      zipkin:
+        endpoint: 0.0.0.0:9411
+
+    processors:
+      batch:
+        timeout: 10s
+        send_batch_size: 1024
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 512
+      resource:
+        attributes:
+          - key: service.namespace
+            value: leninkart
+            action: upsert
+          - key: deployment.environment
+            value: dev
+            action: upsert
+
+    exporters:
+      otlp/jaeger:
+        endpoint: jaeger-collector.dev.svc.cluster.local:4317
+        tls:
+          insecure: true
+      prometheus:
+        endpoint: "0.0.0.0:8889"
+        namespace: leninkart
+      logging:
+        loglevel: info
+
+    extensions:
+      health_check:
+        endpoint: :13133
+
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp, zipkin]
+          processors: [memory_limiter, resource, batch]
+          exporters: [otlp/jaeger, logging]
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, resource, batch]
+          exporters: [prometheus, logging]
+```
+
+### FILE: k8s\otel\collector-deployment.yaml
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.92.0
+          args:
+            - "--config=/conf/config.yaml"
+          ports:
+            - containerPort: 4317
+            - containerPort: 4318
+            - containerPort: 9411
+            - containerPort: 8889
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+```
+
+### FILE: k8s\otel\collector-service.yaml
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: dev
+spec:
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+    - name: otlp-http
+      port: 4318
+    - name: zipkin
+      port: 9411
+    - name: prometheus
+      port: 8889
+```
+
 ### DIRECTORY: k8s\postgres/
 
 ### FILE: k8s\postgres\postgres-secret.yaml
@@ -1725,6 +4762,554 @@ spec:
         resources:
           requests:
             storage: 8Gi
+```
+
+### DIRECTORY: k8s\prometheus/
+
+### FILE: k8s\prometheus\prometheus-configmap.yaml
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: dev
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      - job_name: 'otel-collector'
+        static_configs:
+          - targets: ['otel-collector.dev.svc.cluster.local:8889']
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - dev
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+```
+
+### FILE: k8s\prometheus\prometheus-deployment.yaml
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      serviceAccountName: prometheus
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.48.1
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: storage
+              mountPath: /prometheus
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: storage
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: dev
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - port: 9090
+```
+
+### FILE: k8s\prometheus\prometheus-rbac.yaml
+```
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: dev
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "services", "endpoints", "pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: dev
+```
+
+### FILE: k8s\prometheus\prometheus.yaml
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: dev
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      - job_name: otel
+        static_configs:
+          - targets: [otel-collector:8889]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.48.1
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: dev
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - port: 9090
+```
+
+### DIRECTORY: k8s\vault/
+
+### FILE: k8s\vault\00-namespace.yaml
+```
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vault
+```
+
+### FILE: k8s\vault\01-serviceaccount.yaml
+```
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault
+  namespace: vault
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vault-server-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: vault
+    namespace: vault
+```
+
+### FILE: k8s\vault\02-configmap.yaml
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-config
+  namespace: vault
+data:
+  vault-config.hcl: |
+    ui = true
+    
+    listener "tcp" {
+      address = "0.0.0.0:8200"
+      tls_disable = 1
+    }
+    
+    storage "file" {
+      path = "/vault/data"
+    }
+    
+    # Development mode - for production use proper storage backend
+    disable_mlock = true
+```
+
+### FILE: k8s\vault\03-statefulset.yaml
+```
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vault
+  namespace: vault
+  labels:
+    app: vault
+spec:
+  serviceName: vault
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vault
+  template:
+    metadata:
+      labels:
+        app: vault
+    spec:
+      serviceAccountName: vault
+      containers:
+        - name: vault
+          image: hashicorp/vault:1.15.4
+          args:
+            - "server"
+            - "-config=/vault/config/vault-config.hcl"
+          env:
+            - name: VAULT_ADDR
+              value: "http://127.0.0.1:8200"
+            - name: VAULT_API_ADDR
+              value: "http://vault.vault.svc.cluster.local:8200"
+            - name: SKIP_CHOWN
+              value: "true"
+            - name: SKIP_SETCAP
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8200
+              protocol: TCP
+            - name: cluster
+              containerPort: 8201
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /vault/config
+            - name: data
+              mountPath: /vault/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /v1/sys/health?standbyok=true
+              port: 8200
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /v1/sys/health?standbyok=true&uninitcode=204
+              port: 8200
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: vault-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+```
+
+### FILE: k8s\vault\04-service.yaml
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault
+  namespace: vault
+  labels:
+    app: vault
+spec:
+  type: ClusterIP
+  selector:
+    app: vault
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+    - name: cluster
+      port: 8201
+      targetPort: 8201
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault-ui
+  namespace: vault
+  labels:
+    app: vault
+spec:
+  type: ClusterIP
+  selector:
+    app: vault
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+```
+
+### FILE: k8s\vault\05-init-job.yaml
+```
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-init
+  namespace: vault
+spec:
+  template:
+    metadata:
+      labels:
+        app: vault-init
+    spec:
+      serviceAccountName: vault
+      restartPolicy: OnFailure
+      containers:
+        - name: vault-init
+          image: hashicorp/vault:1.15.4
+          env:
+            - name: VAULT_ADDR
+              value: "http://vault.vault.svc.cluster.local:8200"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Waiting for Vault to be ready..."
+              sleep 10
+              
+              # Check if Vault is already initialized
+              if vault status 2>&1 | grep -q "Vault is sealed"; then
+                echo "Vault is already initialized"
+                exit 0
+              fi
+              
+              # Initialize Vault
+              echo "Initializing Vault..."
+              vault operator init -key-shares=1 -key-threshold=1 -format=json > /tmp/vault-keys.json
+              
+              # Extract unseal key and root token
+              UNSEAL_KEY=$(cat /tmp/vault-keys.json | grep -o '"unseal_keys_b64":\["[^"]*"\]' | cut -d'"' -f4)
+              ROOT_TOKEN=$(cat /tmp/vault-keys.json | grep -o '"root_token":"[^"]*"' | cut -d'"' -f4)
+              
+              # Unseal Vault
+              echo "Unsealing Vault..."
+              vault operator unseal $UNSEAL_KEY
+              
+              # Login with root token
+              vault login $ROOT_TOKEN
+              
+              # Enable KV secrets engine
+              vault secrets enable -version=2 -path=secret kv
+              
+              # Enable Kubernetes auth
+              vault auth enable kubernetes
+              
+              # Configure Kubernetes auth
+              vault write auth/kubernetes/config \
+                kubernetes_host="https://kubernetes.default.svc:443"
+              
+              echo "Vault initialization complete!"
+              echo "Root Token: $ROOT_TOKEN"
+              echo "Unseal Key: $UNSEAL_KEY"
+              echo ""
+              echo "IMPORTANT: Save these credentials securely!"
+              echo "For dev environment, they're also in /tmp/vault-keys.json"
+```
+
+### DIRECTORY: k8s\vault\policies/
+
+### FILE: k8s\vault\policies\leninkart-policy.hcl
+```
+# LeninKart Application Policy
+path "secret/data/leninkart/*" {
+  capabilities = ["read", "list"]
+}
+
+path "secret/metadata/leninkart/*" {
+  capabilities = ["read", "list"]
+}
+
+path "database/creds/leninkart-*" {
+  capabilities = ["read"]
+}
+```
+
+### FILE: k8s\vault\policies\setup-k8s-auth.sh
+```
+#!/bin/bash
+# Script to configure Vault Kubernetes authentication
+
+export VAULT_ADDR="http://localhost:8200"
+export VAULT_TOKEN="<ROOT_TOKEN>"  # Replace with actual root token
+
+# Create policy
+vault policy write leninkart-policy /vault/policies/leninkart-policy.hcl
+
+# Create Kubernetes role
+vault write auth/kubernetes/role/leninkart-role \
+  bound_service_account_names=vault-auth \
+  bound_service_account_namespaces=dev \
+  policies=leninkart-policy \
+  ttl=24h
+  
+# Enable database secrets engine
+vault secrets enable database
+
+# Configure PostgreSQL dynamic secrets
+vault write database/config/leninkart-postgres \
+  plugin_name=postgresql-database-plugin \
+  allowed_roles="leninkart-*" \
+  connection_url="postgresql://{{username}}:{{password}}@postgres.dev.svc.cluster.local:5432/leninkart?sslmode=disable" \
+  username="postgres" \
+  password="postgres"
+
+# Create database role for product-service
+vault write database/roles/leninkart-product \
+  db_name=leninkart-postgres \
+  creation_statements="CREATE ROLE \"{{name}\}" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}'; \
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \"{{name}}\"; \
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO \"{{name}\}";" \
+  default_ttl="1h" \
+  max_ttl="24h"
+
+# Create database role for order-service
+vault write database/roles/leninkart-order \
+  db_name=leninkart-postgres \
+  creation_statements="CREATE ROLE \"{{name}\}" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}'; \
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \"{{name}}\"; \
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO \"{{name}\}";" \
+  default_ttl="1h" \
+  max_ttl="24h"
+
+echo "Vault configuration complete!"
+```
+
+### DIRECTORY: scripts/
+
+### FILE: scripts\vault-quickstart.sh
+```
+#!/bin/bash
+# Vault Quick Start Script
+
+set -e
+
+echo "==================================================================="
+echo "LeninKart Vault Quick Start"
+echo "==================================================================="
+
+# Check if Vault is running
+echo "1. Checking Vault status..."
+kubectl wait --for=condition=ready pod -l app=vault -n vault --timeout=120s
+
+# Port forward
+echo "2. Setting up port-forward..."
+kubectl port-forward -n vault svc/vault 8200:8200 &
+PF_PID=$!
+sleep 3
+
+export VAULT_ADDR='http://127.0.0.1:8200'
+
+# Check if initialized
+if vault status 2>&1 | grep -q "Vault is not initialized"; then
+  echo "3. Initializing Vault..."
+  vault operator init -key-shares=1 -key-threshold=1 -format=json > vault-keys.json
+  
+  UNSEAL_KEY=$(cat vault-keys.json | jq -r '.unseal_keys_b64[0]')
+  ROOT_TOKEN=$(cat vault-keys.json | jq -r '.root_token')
+  
+  echo "4. Unsealing Vault..."
+  vault operator unseal $UNSEAL_KEY
+  
+  echo "5. Logging in..."
+  vault login $ROOT_TOKEN
+  
+  echo ""
+  echo "==================================================================="
+  echo "IMPORTANT: Save these credentials!"
+  echo "==================================================================="
+  echo "Root Token: $ROOT_TOKEN"
+  echo "Unseal Key: $UNSEAL_KEY"
+  echo ""
+  echo "Credentials also saved in: vault-keys.json"
+  echo "==================================================================="
+else
+  echo "Vault already initialized"
+fi
+
+# Clean up
+kill $PF_PID 2>/dev/null || true
+
+echo ""
+echo "✓ Vault setup complete!"
+echo "Next steps:"
+echo "  1. Configure Kubernetes auth: kubectl exec -n vault vault-0 -- /vault/policies/setup-k8s-auth.sh"
+echo "  2. Store secrets: vault kv put secret/leninkart/..."
+echo "  3. Check ExternalSecrets: kubectl get externalsecrets -n dev"
 ```
 
 ### DIRECTORY: _auto_fix_backup_20260128_065718/
