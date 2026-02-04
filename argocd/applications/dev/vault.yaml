@@ -12,7 +12,7 @@ spec:
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: dev
-    path: k8s/vault
+    path: platform/vault/config
     directory:
       recurse: true
   

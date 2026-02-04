@@ -1,0 +1,35 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leninkart-ingress
+  namespace: {{ .Values.namespace }}
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      # API PATHS MUST COME FIRST!
+      - path: /api/products
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-product-service
+            port:
+              number: 8081
+              
+      - path: /api/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-order-service
+            port:
+              number: 8080
+      
+      # FRONTEND COMES LAST (catches everything else)
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: leninkart-frontend
+            port:
+              number: 80

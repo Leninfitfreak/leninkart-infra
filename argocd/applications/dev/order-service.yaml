@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: dev
-    path: helm/order-service
+    path: applications/order-service/helm
     helm:
       valueFiles:
         - values-dev.yaml

@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: leninkart
+  namespace: argocd
+spec:
+  description: LeninKart microservices platform with observability and secrets management
+  
+  # Source repositories
+  sourceRepos:
+    - 'https://github.com/Leninfitfreak/leninkart-infra.git'
+    - 'https://charts.external-secrets.io'  # External Secrets Operator Helm chart
+    - 'https://istio-release.storage.googleapis.com/charts'  # Istio (if needed)
+    - '*'  # Allow all repos (remove in production)
+  
+  # Destination clusters and namespaces
+  destinations:
+    - namespace: dev
+      server: https://kubernetes.default.svc
+    - namespace: staging
+      server: https://kubernetes.default.svc
+    - namespace: prod
+      server: https://kubernetes.default.svc
+    - namespace: vault
+      server: https://kubernetes.default.svc
+    - namespace: external-secrets-system
+      server: https://kubernetes.default.svc
+    - namespace: istio-system
+      server: https://kubernetes.default.svc
+    - namespace: '*'  # Allow all namespaces (restrict in production)
+      server: https://kubernetes.default.svc
+  
+  # Cluster resource allow list
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  
+  # Namespace resource allow list
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

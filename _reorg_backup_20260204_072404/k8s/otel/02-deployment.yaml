@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.92.0
+          args: ["--config=/conf/config.yaml"]
+          ports:
+            - containerPort: 4317
+            - containerPort: 4318
+            - containerPort: 9411
+            - containerPort: 8889
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: dev
+spec:
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+    - name: otlp-http
+      port: 4318
+    - name: zipkin
+      port: 9411
+    - name: metrics
+      port: 8889

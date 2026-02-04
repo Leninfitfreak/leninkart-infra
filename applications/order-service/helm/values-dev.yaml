@@ -1,0 +1,83 @@
+replicaCount: 1
+image:
+  repository: leninfitfreak/order-service
+  tag: "21405007976"
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 8080
+startupProbe:
+  tcpSocket:
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  failureThreshold: 60
+readinessProbe:
+  httpGet:
+    path: /actuator/health/readiness
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 6
+livenessProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: 8080
+  initialDelaySeconds: 60
+  periodSeconds: 20
+  failureThreshold: 10
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
+env:
+  # ---------- DATABASE ----------
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
+  SPRING_DATASOURCE_USERNAME: postgres
+  SPRING_DATASOURCE_PASSWORD: postgres
+  SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+  SPRING_JPA_HIBERNATE_DDL_AUTO: update
+  SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "60000"
+  # ---------- KAFKA ----------
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-0.kafka.dev.svc.cluster.local:9092
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+
+
+# ============================================
+# OPENTELEMETRY CONFIGURATION
+# ============================================
+otel:
+  enabled: true
+  javaAgent:
+    version: "1.32.0"
+  serviceName: "order-service"
+  endpoint: "http://otel-collector:4318"
+
+annotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+
+# ============================================
+# VAULT SECRETS INTEGRATION
+# ============================================
+# Secrets are now managed by HashiCorp Vault via External Secrets Operator
+# 
+# To enable Vault secrets in deployments, add envFrom to your deployment:
+#
+# envFrom:
+#   - secretRef:
+#       name: product-service-db-secret
+#   - secretRef:
+#       name: product-service-config-secret
+#
+# This replaces hardcoded environment variables with Vault-managed secrets
+
+secrets:
+  vault:
+    enabled: true
+    secretStore: vault-backend
+    refreshInterval: 1h

@@ -1,0 +1,10 @@
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: leninkart-telemetry
+  namespace: dev
+spec:
+  tracing:
+    - providers:
+        - name: zipkin
+      randomSamplingPercentage: 100.0

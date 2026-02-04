@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: dev
-    path: k8s/jaeger
+    path: observability/jaeger
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
