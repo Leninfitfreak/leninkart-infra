@@ -59,29 +59,29 @@ spec:
           resources:
             requests:
               cpu: 100m
-              memory: 256Mi
+              memory: 512Mi
             limits:
               cpu: 500m
-              memory: 512Mi
-          # Simplified probes - only check after longer delay
+              memory: 1Gi
+          # Relaxed probes to avoid restarting while Vault is sealed on startup
           livenessProbe:
             httpGet:
               path: /v1/sys/health
               port: 8200
               scheme: HTTP
-            initialDelaySeconds: 60
+            initialDelaySeconds: 240
             periodSeconds: 30
             timeoutSeconds: 5
-            failureThreshold: 3
+            failureThreshold: 10
           readinessProbe:
             httpGet:
               path: /v1/sys/health
               port: 8200
               scheme: HTTP
-            initialDelaySeconds: 30
+            initialDelaySeconds: 120
             periodSeconds: 10
             timeoutSeconds: 3
-            failureThreshold: 3
+            failureThreshold: 10
       volumes:
         - name: config
           configMap:
