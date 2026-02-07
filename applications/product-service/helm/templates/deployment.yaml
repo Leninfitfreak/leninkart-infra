@@ -25,3 +25,15 @@ spec:
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
+
+          {{- if and .Values.secrets .Values.secrets.vault .Values.secrets.vault.enabled }}
+          envFrom:
+            {{- if .Values.secrets.vault.dbSecretName }}
+            - secretRef:
+                name: {{ .Values.secrets.vault.dbSecretName }}
+            {{- end }}
+            {{- if .Values.secrets.vault.configSecretName }}
+            - secretRef:
+                name: {{ .Values.secrets.vault.configSecretName }}
+            {{- end }}
+          {{- end }}
