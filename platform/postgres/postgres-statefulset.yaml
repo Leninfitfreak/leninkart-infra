@@ -43,11 +43,11 @@ spec:
               cpu: 500m
               memory: 512Mi
           volumeMounts:
-            - name: postgres-data
+            - name: postgres-data-v2
               mountPath: /var/lib/postgresql/data
   volumeClaimTemplates:
     - metadata:
-        name: postgres-data
+        name: postgres-data-v2
       spec:
         accessModes: ["ReadWriteOnce"]
         resources:
