@@ -47,3 +47,15 @@ Next Steps:
   - `kubectl -n dev get endpoints leninkart-product-service`
   - `kubectl -n dev get endpoints leninkart-order-service`
   - UI `/api/products` and `/api/orders` return 200.
+
+## 2026-02-09 (Follow-up)
+Issue: Browser showing `TLS_error: CERTIFICATE_VERIFY_FAILED` and 503s from gateway to `/`, `/api/products`, `/api/orders`.
+
+Actions Taken (Repo Changes):
+- Updated Istio DestinationRules to **disable TLS** for dev services to stop gateway → service TLS verification failures:
+  - `platform/istio/config/destinationrules.yaml`
+
+Next Steps:
+- Commit + push this change.
+- Sync Argo app `istio-config-dev`.
+- Restart `product-service` and `dev-order-service-order-service` deployments after sync.

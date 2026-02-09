@@ -7,7 +7,7 @@ spec:
   host: leninkart-product-service.dev.svc.cluster.local
   trafficPolicy:
     tls:
-      mode: ISTIO_MUTUAL
+      mode: DISABLE
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
@@ -18,7 +18,7 @@ spec:
   host: leninkart-order-service.dev.svc.cluster.local
   trafficPolicy:
     tls:
-      mode: ISTIO_MUTUAL
+      mode: DISABLE
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
@@ -29,7 +29,7 @@ spec:
   host: leninkart-frontend.dev.svc.cluster.local
   trafficPolicy:
     tls:
-      mode: ISTIO_MUTUAL
+      mode: DISABLE
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
@@ -40,7 +40,7 @@ spec:
   host: postgres.dev.svc.cluster.local
   trafficPolicy:
     tls:
-      mode: ISTIO_MUTUAL
+      mode: DISABLE
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
@@ -51,4 +51,4 @@ spec:
   host: kafka.dev.svc.cluster.local
   trafficPolicy:
     tls:
-      mode: ISTIO_MUTUAL
+      mode: DISABLE
