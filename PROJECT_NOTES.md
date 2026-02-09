@@ -59,3 +59,15 @@ Next Steps:
 - Commit + push this change.
 - Sync Argo app `istio-config-dev`.
 - Restart `product-service` and `dev-order-service-order-service` deployments after sync.
+
+## 2026-02-09 (Follow-up 2)
+Issue: TLS verify failures persist on Kafka traffic and 503s still seen from gateway.
+
+Actions Taken (Repo Changes):
+- Added namespace-level PeerAuthentication in `dev` to allow plaintext (PERMISSIVE):
+  - `platform/istio/config/peerauthentication-dev.yaml`
+
+Next Steps:
+- Commit + push.
+- Sync Argo app `istio-config-dev`.
+- Restart `product-service` and `dev-order-service-order-service` deployments.
