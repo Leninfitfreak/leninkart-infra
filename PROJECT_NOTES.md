@@ -200,3 +200,14 @@ Actions Taken (Repo Changes):
 Next Steps:
 - Build and push updated frontend + product-service images.
 - Update dev Helm image tags and sync Argo.
+
+## 2026-02-10 (Workflow env cleanup)
+Issue: Workflow defaults still referenced old helm/ path in env.
+
+Actions Taken (Repo Changes):
+- Updated workflow env defaults to use applications/* path:
+  - Product service: `.github/workflows/ci-cd.yml` (CHART_PATH, VALUES_FILE)
+  - Order service: `.github/workflows/ci-cd.yaml` (VALUES_FILE)
+
+Next Steps:
+- Commit + push these workflow updates on dev.
