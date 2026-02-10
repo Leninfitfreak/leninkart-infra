@@ -182,3 +182,21 @@ Actions Taken:
   - frontend
   - product-service
   - dev-order-service-order-service
+
+## 2026-02-10 (Signup + DB users)
+Issue: Login only supported hardcoded users; add signup with persistent users.
+
+Actions Taken (Repo Changes):
+- Frontend (C:/Projects/Services/leninkart-frontend):
+  - Added login/signup toggle and POST /auth/signup support.
+  - Improved auth error handling for 409/401 responses.
+- Product Service (C:/Projects/Services/leninkart-product-service):
+  - Added UserAccount entity + UserRepository (users table).
+  - Added UserService with BCrypt password hashing.
+  - Added UserSeeder to seed accounts from APP_AUTH_USERS.
+  - /auth/signup now creates users and returns JWT.
+  - Added spring-security-crypto dependency.
+
+Next Steps:
+- Build and push updated frontend + product-service images.
+- Update dev Helm image tags and sync Argo.
