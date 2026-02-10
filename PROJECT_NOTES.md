@@ -172,3 +172,13 @@ Actions Taken (Repo Changes):
 
 Next Steps:
 - Commit + push these workflow updates to each service repo.
+
+## 2026-02-10 (Infra sync + rollout)
+Issue: Sync infra dev branch and apply service restarts.
+
+Actions Taken:
+- Rebased and pushed infra dev with updated product/order values and Istio route.
+- Rolled out deployments in dev namespace:
+  - frontend
+  - product-service
+  - dev-order-service-order-service
