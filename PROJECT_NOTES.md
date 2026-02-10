@@ -71,3 +71,104 @@ Next Steps:
 - Commit + push.
 - Sync Argo app `istio-config-dev`.
 - Restart `product-service` and `dev-order-service-order-service` deployments.
+
+## 2026-02-09 (Frontend + Services)
+Issue: Need a production-quality login UI and user-centric data across orders/products.
+
+Actions Taken (Repo Changes):
+- Frontend (C:/Projects/Services/leninkart-frontend):
+  - Replaced `src/index.js` with a login-first UI, user stats, and richer layout.
+  - Replaced `src/index.css` with new design system, gradients, and responsive layout.
+  - Added user tracking in API calls:
+    - `X-User` header on buy requests
+    - `createdBy` on product creation
+- Product Service (C:/Projects/Services/leninkart-product-service):
+  - Added `createdBy` field to `Product`.
+  - Included user in Kafka payload for order creation.
+- Order Service (C:/Projects/Services/leninkart-order-service):
+  - Added `userName` field to `OrderEntity`.
+  - Persisted user from Kafka payload in `OrderConsumer`.
+
+Next Steps:
+- Commit and push dev branch changes in the three services repos.
+- Deploy new frontend image/tag and update infra Helm values for dev.
+
+## 2026-02-10 (Auth + User-scoped Data)
+Issue: Add login page + JWT auth with user-scoped products and orders.
+
+Actions Taken (Repo Changes):
+- Frontend (C:/Projects/Services/leninkart-frontend):
+  - Implemented login page that calls `POST /auth/login` and stores JWT.
+  - Added axios interceptor to attach `Authorization: Bearer <token>` to API calls.
+  - Updated dashboard to show user-based data and stats.
+  - Updated UI theme to LeninKart branding with primary color #1976D2.
+- Product Service (C:/Projects/Services/leninkart-product-service):
+  - Added JWT auth support (`JwtService`, `JwtAuthFilter`, `AuthController`).
+  - Added in-memory auth user store (configurable via `APP_AUTH_USERS`).
+  - Enforced user-scoped product visibility; `createdBy` set from JWT user.
+  - Added `app.jwt.*` and `app.auth.users` configuration.
+- Order Service (C:/Projects/Services/leninkart-order-service):
+  - Added JWT auth filter and `JwtService`.
+  - Enforced user-scoped order visibility using `userName` from JWT.
+  - Added `app.jwt.*` configuration.
+- Infra (C:/Projects/infra/leninkart-infra):
+  - Added `/auth` route to product-service in `platform/istio/config/virtualservice.yaml`.
+
+Next Steps:
+- Build/push new images for frontend/product/order services.
+- Update dev Helm values with new image tags.
+- Sync Argo apps: `frontend-dev`, `dev-product-service`, `dev-order-service`, `istio-config-dev`.
+- Provide `APP_JWT_SECRET` and `APP_AUTH_USERS` in dev environment (Vault/ExternalSecrets).
+
+## 2026-02-10 (Hardcoded JWT config in dev)
+Issue: Use hardcoded JWT/auth config for now; Vault integration later.
+
+Actions Taken (Repo Changes):
+- Added hardcoded JWT + auth user values in dev Helm values:
+  - `applications/product-service/helm/values-dev.yaml`
+  - `applications/order-service/helm/values-dev.yaml`
+
+Values Added:
+- `APP_JWT_SECRET=leninkart-dev-secret`
+- `APP_JWT_ISSUER=leninkart`
+- `APP_JWT_TTL_SECONDS=86400`
+- `APP_AUTH_USERS=leninkart:leninkart123:USER,admin:admin123:ADMIN` (product-service only)
+
+Next Steps:
+- Sync Argo apps `dev-product-service` and `dev-order-service`.
+- Rebuild/push images if not already done, then update image tags in values.
+
+## 2026-02-10 (Service repo pushes)
+Issue: Push frontend/product/order service changes to dev branch.
+
+Actions Taken:
+- Committed and pushed service changes to dev:
+  - Frontend: 5073c36 (dev)
+  - Product service: d01bbc1 (dev)
+  - Order service: b28b6ac (dev)
+
+Notes:
+- These are separate repos, so commit hashes differ by design.
+
+## 2026-02-10 (JWT build fix)
+Issue: Maven build failed due to JwtParserBuilder.verifyWith expecting SecretKey.
+
+Actions Taken (Repo Changes):
+- Updated JWT key type to `javax.crypto.SecretKey` in both services:
+  - `C:/Projects/Services/leninkart-order-service/src/main/java/com/example/order/auth/JwtService.java`
+  - `C:/Projects/Services/leninkart-product-service/src/main/java/com/example/product/auth/JwtService.java`
+
+Next Steps:
+- Rebuild service images and push new tags.
+
+## 2026-02-10 (Workflow path fixes)
+Issue: GitHub Actions workflows updating wrong Helm values path (helm/... not found).
+
+Actions Taken (Repo Changes):
+- Updated values file paths in service workflows to match infra layout:
+  - Frontend: `.github/workflows/ci-cd.yaml` -> `applications/frontend/helm/values-*.yaml`
+  - Product service: `.github/workflows/ci-cd.yml` -> `applications/product-service/helm/values-*.yaml`
+  - Order service: `.github/workflows/ci-cd.yaml` -> `applications/order-service/helm/values-*.yaml`
+
+Next Steps:
+- Commit + push these workflow updates to each service repo.

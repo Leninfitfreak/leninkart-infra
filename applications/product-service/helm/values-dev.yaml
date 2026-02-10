@@ -42,6 +42,10 @@ env:
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
   SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: 'true'
   SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka.dev.svc.cluster.local:9092
+  APP_JWT_SECRET: "leninkart-dev-secret"
+  APP_JWT_ISSUER: "leninkart"
+  APP_JWT_TTL_SECONDS: "86400"
+  APP_AUTH_USERS: "leninkart:leninkart123:USER,admin:admin123:ADMIN"
 # ============================================
 # OPENTELEMETRY CONFIGURATION
 # ============================================
