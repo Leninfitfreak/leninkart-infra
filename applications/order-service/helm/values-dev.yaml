@@ -1,7 +1,7 @@
 replicaCount: 1
 image:
   repository: leninfitfreak/order-service
-  tag: "21405007976"
+  tag: "21870201593"
   pullPolicy: IfNotPresent
 service:
   type: ClusterIP
@@ -43,8 +43,6 @@ env:
   SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka.dev.svc.cluster.local:9092
   MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
   MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
-
-
 # ============================================
 # OPENTELEMETRY CONFIGURATION
 # ============================================
@@ -54,11 +52,9 @@ otel:
     version: "1.32.0"
   serviceName: "order-service"
   endpoint: "http://otel-collector:4318"
-
 annotations:
   prometheus.io/scrape: "true"
   prometheus.io/port: "8080"
-
 # ============================================
 # VAULT SECRETS INTEGRATION
 # ============================================
@@ -73,7 +69,6 @@ annotations:
 #       name: product-service-config-secret
 #
 # This replaces hardcoded environment variables with Vault-managed secrets
-
 secrets:
   vault:
     enabled: true
