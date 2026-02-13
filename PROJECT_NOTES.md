@@ -324,3 +324,23 @@ Actions Taken (Repo Changes):
 
 Operational Note:
 - With only 2 brokers, keep `min.insync.replicas=1` for availability during single-node disruption.
+
+## 2026-02-13 - Kafka 2-broker HA recovery (dev)
+- Issue:
+  - Kafka scale-out from 1 broker to 2 brokers failed with KRaft voter mismatch on `kafka-0`.
+  - Error seen: `Configured voter set: [1, 2] ... state file: [1]`.
+  - `order-service` consumer showed repeated bootstrap disconnects.
+- Actions taken:
+  - Kept Kafka at 2 replicas in infra.
+  - Updated `platform/kafka/kafka.yaml` with init container `kafka-storage-prepare` to:
+    - run one-time KRaft metadata reset marker logic (`.kraft-2node-init`),
+    - enforce `chown -R 1000:1000 /var/lib/kafka/data` before Kafka starts.
+  - Committed and pushed to `dev` branch.
+  - Force recreated Kafka pods to apply new pod template.
+  - Restarted `dev-order-service-order-service`, `product-service`, `frontend`, and `postgres-v2` during recovery window.
+- Verification:
+  - `kafka-0` and `kafka-1` are both `2/2 Running`.
+  - `dev-order-service-order-service` is `2/2 Running`.
+  - Latest order-service logs show successful consumer group join and partition assignment.
+- Infra commit:
+  - `1abe69c` (`fix(kafka): prepare pvc permissions and one-time kraft metadata reset for 2-broker quorum`)
