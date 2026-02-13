@@ -265,3 +265,16 @@ Actions Taken (Repo Changes):
 - Order service (`C:/Projects/Services/leninkart-order-service`):
   - Dockerfile: standardized Maven build flags (`-T1C`) and runtime comment cleanup.
   - Workflow: checkout infra into `infra/` path and run updates/commit from that path.
+
+## 2026-02-10 (Workflow push race fix)
+Issue: Service release workflows failed to push infra updates due to concurrent writes on `dev`.
+
+Actions Taken:
+- Updated all service workflows to handle infra push race safely:
+  - Added `git pull --rebase origin $INFRA_BRANCH` before push.
+  - Added retry loop (3 attempts) for push step.
+  - Switched git config usage from global to repo-local in product/order workflows.
+- Files updated:
+  - `C:/Projects/Services/leninkart-frontend/.github/workflows/ci-cd.yaml`
+  - `C:/Projects/Services/leninkart-product-service/.github/workflows/ci-cd.yml`
+  - `C:/Projects/Services/leninkart-order-service/.github/workflows/ci-cd.yaml`
