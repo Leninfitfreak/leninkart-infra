@@ -307,3 +307,20 @@ Actions Taken:
 Service Check Result:
 - `order-service`: already aligned to `SPRING_KAFKA_BOOTSTRAP_SERVERS` with dev DNS.
 - `frontend`: no Kafka client config.
+
+## 2026-02-13 (Kafka scale to 2 brokers)
+Issue: Need 2 Kafka brokers for improved availability and multi-broker replication in dev.
+
+Actions Taken (Repo Changes):
+- Updated Kafka StatefulSet to 2 replicas with dynamic pod-aware broker identity/listeners:
+  - `platform/kafka/kafka.yaml`
+  - Added startup command to derive `KAFKA_NODE_ID` from pod ordinal.
+  - Added dynamic `KAFKA_ADVERTISED_LISTENERS` per pod hostname.
+  - Updated controller quorum voters to include broker 1 and 2.
+  - Set replication factors to 2 for offsets/transaction/default topics.
+- Updated app bootstrap server lists to both broker endpoints:
+  - `applications/product-service/helm/values-dev.yaml`
+  - `applications/order-service/helm/values-dev.yaml`
+
+Operational Note:
+- With only 2 brokers, keep `min.insync.replicas=1` for availability during single-node disruption.
