@@ -6,22 +6,32 @@ metadata:
 spec:
   serviceName: kafka
   replicas: 2
-
   selector:
     matchLabels:
       app: kafka
-
   template:
     metadata:
       labels:
         app: kafka
     spec:
-      # ==========================================================
-      # 🔐 CRITICAL FIX: Allow Kafka (uid 1000) to write to PVC
-      # ==========================================================
       securityContext:
         fsGroup: 1000
-
+      initContainers:
+        - name: kafka-storage-prepare
+          image: busybox:1.36
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              # One-time reset of old KRaft metadata to allow 2-node quorum.
+              if [ ! -f /var/lib/kafka/data/.kraft-2node-init ]; then
+                rm -rf /var/lib/kafka/data/* /var/lib/kafka/data/.[!.]* /var/lib/kafka/data/..?* 2>/dev/null || true
+                touch /var/lib/kafka/data/.kraft-2node-init
+              fi
+              chown -R 1000:1000 /var/lib/kafka/data
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /var/lib/kafka/data
       containers:
         - name: kafka
           image: confluentinc/cp-kafka:7.5.0
@@ -33,64 +43,41 @@ spec:
               export KAFKA_NODE_ID="$((ORDINAL + 1))"
               export KAFKA_ADVERTISED_LISTENERS="PLAINTEXT://${HOSTNAME}.kafka.dev.svc.cluster.local:9092"
               exec /etc/confluent/docker/run
-
           ports:
             - name: broker
               containerPort: 9092
             - name: controller
               containerPort: 9093
-
           env:
-            # ---------------- KRaft MODE ----------------
             - name: KAFKA_PROCESS_ROLES
               value: "broker,controller"
-
             - name: CLUSTER_ID
               value: "cICOmzzYSGur9Qz-qJTksA"
-
             - name: KAFKA_CONTROLLER_QUORUM_VOTERS
               value: "1@kafka-0.kafka.dev.svc.cluster.local:9093,2@kafka-1.kafka.dev.svc.cluster.local:9093"
-
-            # ---------------- LISTENERS ----------------
             - name: KAFKA_LISTENERS
               value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
-
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
               value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
-
             - name: KAFKA_INTER_BROKER_LISTENER_NAME
               value: "PLAINTEXT"
-
             - name: KAFKA_CONTROLLER_LISTENER_NAMES
               value: "CONTROLLER"
-
-            # ---------------- STORAGE ----------------
             - name: KAFKA_LOG_DIRS
               value: "/var/lib/kafka/data"
-
-            # ---------------- 2-NODE REPLICATION ----------------
             - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
               value: "2"
-
             - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
               value: "2"
-
             - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
               value: "1"
-
             - name: KAFKA_DEFAULT_REPLICATION_FACTOR
               value: "2"
-
             - name: KAFKA_MIN_INSYNC_REPLICAS
               value: "1"
-
           volumeMounts:
             - name: kafka-data
               mountPath: /var/lib/kafka/data
-
-  # ==========================================================
-  # 💾 PERSISTENT VOLUME (AUTO-CREATES PVC)
-  # ==========================================================
   volumeClaimTemplates:
     - metadata:
         name: kafka-data
