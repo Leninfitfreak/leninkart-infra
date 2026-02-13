@@ -211,3 +211,57 @@ Actions Taken (Repo Changes):
 
 Next Steps:
 - Commit + push these workflow updates on dev.
+
+## 2026-02-10 (Frontend signup UX refinement)
+Issue: Signup was auto-logging users in immediately after account creation.
+
+Actions Taken (Repo Changes):
+- Updated `C:/Projects/Services/leninkart-frontend/src/index.js`:
+  - Signup no longer creates a session automatically.
+  - After successful signup, user is switched to login mode with success notice.
+  - Added additional signup fields and validation:
+    - Full name
+    - Work email format check
+    - Confirm password match
+    - Password minimum length
+  - Replaced generic UI labels with more professional titles and copy.
+- Updated `C:/Projects/Services/leninkart-frontend/src/index.css`:
+  - Added `.notice` style for successful account creation message.
+
+Next Steps:
+- Build and push new frontend image.
+- Update infra frontend image tag in dev values and sync Argo app.
+
+## 2026-02-10 (Email-based auth alignment)
+Issue: Frontend signup/login flow needed email-first inputs and backend/database needed matching fields and validation.
+
+Actions Taken (Repo Changes):
+- Frontend (C:/Projects/Services/leninkart-frontend/src/index.js):
+  - Login now sends `email` + `password`.
+  - Signup now sends `fullName` + `email` + `password`.
+  - Updated validation and auth error messaging to email-based wording.
+  - Signup still requires manual sign-in after account creation.
+- Product service auth updates:
+  - `AuthRequest` now supports `email`, `fullName`, and legacy `username` fallback.
+  - `AuthController` now uses email-first login and validates signup with `fullName/email/password`.
+  - `UserAccount` now persists `email` and `full_name` columns.
+  - `UserRepository` includes `findByEmailIgnoreCase` and `existsByEmailIgnoreCase`.
+  - `UserService` now creates users with full name + email and authenticates email-first (username fallback for legacy users).
+  - Seeder now maps legacy non-email seed users to synthetic email for compatibility.
+
+Validation Note:
+- Local Maven CLI is unavailable in this environment (`mvn` not found), so compile validation was not run here.
+
+## 2026-02-10 (Docker + workflow hardening)
+Issue: Align Docker/runtime behavior and workflow infra checkout across all services for reliable dev releases.
+
+Actions Taken (Repo Changes):
+- Frontend (`C:/Projects/Services/leninkart-frontend`):
+  - Dockerfile: switched to `COPY package*.json` and quieter npm install flags.
+  - Workflow: made infra repo reference owner-agnostic (`github.repository_owner/leninkart-infra`).
+- Product service (`C:/Projects/Services/leninkart-product-service`):
+  - Dockerfile: added dependency prefetch, standardized Maven build flags, moved runtime to JRE image, exposed 8081, simplified entrypoint.
+  - Workflow: checkout infra into `infra/` path and run updates/commit from that path.
+- Order service (`C:/Projects/Services/leninkart-order-service`):
+  - Dockerfile: standardized Maven build flags (`-T1C`) and runtime comment cleanup.
+  - Workflow: checkout infra into `infra/` path and run updates/commit from that path.
