@@ -293,3 +293,17 @@ Fix Applied:
 
 Expected Result:
 - Existing account attempt now returns 409 and frontend shows "User already exists. Please sign in." instead of generic failure.
+
+## 2026-02-13 (Kafka producer bootstrap alignment)
+Issue: Product-service producer was still using `kafka:9092` from custom env lookup, while consumer/service config uses dev service DNS.
+
+Actions Taken:
+- Updated product-service Kafka bootstrap source to Spring property/env:
+  - `C:/Projects/Services/leninkart-product-service/src/main/resources/application.properties`
+  - `spring.kafka.bootstrap-servers=${SPRING_KAFKA_BOOTSTRAP_SERVERS:kafka.dev.svc.cluster.local:9092}`
+- Refactored custom producer config to consume `spring.kafka.bootstrap-servers` via `@Value`:
+  - `C:/Projects/Services/leninkart-product-service/src/main/java/com/example/product/config/KafkaProducerConfig.java`
+
+Service Check Result:
+- `order-service`: already aligned to `SPRING_KAFKA_BOOTSTRAP_SERVERS` with dev DNS.
+- `frontend`: no Kafka client config.
