@@ -344,3 +344,6 @@ Operational Note:
   - Latest order-service logs show successful consumer group join and partition assignment.
 - Infra commit:
   - `1abe69c` (`fix(kafka): prepare pvc permissions and one-time kraft metadata reset for 2-broker quorum`)
+
+## 2026-02-13 - Added Infra Learning Dump
+- Added `INFRA_LEARNING_DUMP.md` (root) to document repo structure, GitOps flow, and explain key manifests for learning.
