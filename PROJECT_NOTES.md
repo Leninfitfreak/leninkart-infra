@@ -278,3 +278,18 @@ Actions Taken:
   - `C:/Projects/Services/leninkart-frontend/.github/workflows/ci-cd.yaml`
   - `C:/Projects/Services/leninkart-product-service/.github/workflows/ci-cd.yml`
   - `C:/Projects/Services/leninkart-order-service/.github/workflows/ci-cd.yaml`
+
+## 2026-02-13 (Signup 500 fix)
+Issue: Signup returned generic auth error due to backend 500 on DB unique constraint (`users.username`).
+
+Root Cause:
+- Existing row already had `username=<email>` but signup pre-check only validated `email` field.
+- Insert then failed with `duplicate key value violates unique constraint` and surfaced as 500.
+
+Fix Applied:
+- Updated `C:/Projects/Services/leninkart-product-service/src/main/java/com/example/product/auth/AuthController.java`:
+  - Signup now checks both `findByEmail(email)` and `findByUsername(email)`.
+  - Added `DataIntegrityViolationException` catch and returns HTTP 409 Conflict.
+
+Expected Result:
+- Existing account attempt now returns 409 and frontend shows "User already exists. Please sign in." instead of generic failure.
