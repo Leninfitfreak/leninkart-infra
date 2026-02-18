@@ -347,3 +347,19 @@ Operational Note:
 
 ## 2026-02-13 - Added Infra Learning Dump
 - Added `INFRA_LEARNING_DUMP.md` (root) to document repo structure, GitOps flow, and explain key manifests for learning.
+
+## 2026-02-18 - Enable OTel traces/metrics export from app services
+- Issue:
+  - Jaeger UI showed `Service (0)` and no traces.
+  - OTel collector was healthy, but app pods were not sending telemetry.
+- Root cause:
+  - `otel:` block existed in values, but Helm templates render only `.Values.env` into container env.
+  - No `OTEL_*` runtime variables were present in `product-service` and `order-service` pods.
+- Fix applied:
+  - Added telemetry env vars under `env` in:
+    - `applications/product-service/helm/values-dev.yaml`
+    - `applications/order-service/helm/values-dev.yaml`
+  - Added: `OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_TRACES_EXPORTER`, `OTEL_METRICS_EXPORTER`, `OTEL_LOGS_EXPORTER`, `MANAGEMENT_TRACING_ENABLED`, `MANAGEMENT_TRACING_SAMPLING_PROBABILITY`.
+- Expected result after Argo sync/redeploy:
+  - Services appear in Jaeger dropdown.
+  - Traces visible for product/order requests.

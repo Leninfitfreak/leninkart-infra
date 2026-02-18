@@ -46,6 +46,14 @@ env:
   APP_JWT_SECRET: "leninkart-dev-secret"
   APP_JWT_ISSUER: "leninkart"
   APP_JWT_TTL_SECONDS: "86400"
+  OTEL_SERVICE_NAME: "order-service"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  OTEL_TRACES_EXPORTER: "otlp"
+  OTEL_METRICS_EXPORTER: "otlp"
+  OTEL_LOGS_EXPORTER: "none"
+  MANAGEMENT_TRACING_ENABLED: "true"
+  MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
 # ============================================
 # OPENTELEMETRY CONFIGURATION
 # ============================================
