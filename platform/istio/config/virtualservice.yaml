@@ -33,6 +33,11 @@ spec:
             host: leninkart-order-service
             port:
               number: 8080
+      timeout: 15s
+      retries:
+        attempts: 3
+        perTryTimeout: 5s
+        retryOn: connect-failure,refused-stream,unavailable,5xx
     - match:
         - uri:
             prefix: /

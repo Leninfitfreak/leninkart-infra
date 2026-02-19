@@ -395,3 +395,28 @@ Operational Note:
 - Expected result after sync/redeploy:
   - Prometheus targets for product/order become UP.
   - Grafana dashboards start showing HTTP/JVM/Kafka metrics after traffic.
+## 2026-02-19 15:54 - Order API 503 stabilization (Declarative infra fix)
+
+### Issue
+- Frontend intermittently received `503 Service Unavailable` for `GET /api/orders` via Istio gateway.
+- Behavior matched transient upstream readiness/routing instability for order-service.
+
+### Changes made (infra repo only, declarative)
+- Updated `applications/order-service/helm/values-dev.yaml`:
+  - Readiness probe path changed to `/actuator/health` (from `/actuator/health/readiness`).
+  - Liveness probe path changed to `/actuator/health` (from `/actuator/health/liveness`).
+  - Added:
+    - `MANAGEMENT_HEALTH_KAFKA_ENABLED=false`
+    - `MANAGEMENT_HEALTH_BINDERS_ENABLED=false`
+  - Goal: prevent Kafka/binder health fluctuations from causing pod unready and upstream 503.
+- Updated `platform/istio/config/virtualservice.yaml` for `/api/orders` route:
+  - Added request timeout and retries:
+    - `timeout: 15s`
+    - `retries.attempts: 3`
+    - `retries.perTryTimeout: 5s`
+    - `retries.retryOn: connect-failure,refused-stream,unavailable,5xx`
+  - Goal: absorb short-lived upstream failures without user-visible 503 spikes.
+
+### Follow-up expected after Argo sync
+- Order service rollout with new probe behavior.
+- Fewer/no intermittent `503` errors on `/api/orders`.
