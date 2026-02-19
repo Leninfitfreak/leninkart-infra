@@ -11,6 +11,14 @@ data:
       - job_name: otel
         static_configs:
           - targets: [otel-collector:8889]
+      - job_name: product-service
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: [leninkart-product-service:8081]
+      - job_name: order-service
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: [leninkart-order-service:8080]
 ---
 apiVersion: apps/v1
 kind: Deployment

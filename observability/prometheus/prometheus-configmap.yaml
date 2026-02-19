@@ -11,6 +11,14 @@ data:
       - job_name: 'otel-collector'
         static_configs:
           - targets: ['otel-collector.dev.svc.cluster.local:8889']
+      - job_name: 'product-service'
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ['leninkart-product-service.dev.svc.cluster.local:8081']
+      - job_name: 'order-service'
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ['leninkart-order-service.dev.svc.cluster.local:8080']
       - job_name: 'kubernetes-pods'
         kubernetes_sd_configs:
           - role: pod

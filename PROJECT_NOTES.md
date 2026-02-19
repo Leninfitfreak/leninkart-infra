@@ -377,3 +377,21 @@ Operational Note:
 - Note:
   - Panels show data only for metrics currently present in Prometheus.
   - If Kafka/JVM series are missing, update scrape pipeline accordingly.
+
+## 2026-02-19 - Fix Grafana no-data by enabling app metrics scrape
+- Issue:
+  - Grafana dashboards showed `No data` for JVM/HTTP/Kafka panels.
+  - Prometheus had only scrape meta metrics (`up`, `scrape_*`).
+- Root cause:
+  - App metrics endpoint `/actuator/prometheus` was not explicitly exposed in service env.
+  - Prometheus scrape config did not include direct product/order service metric jobs.
+- Fix applied:
+  - Enabled prometheus endpoint exposure in app env:
+    - `applications/product-service/helm/values-dev.yaml`
+    - `applications/order-service/helm/values-dev.yaml`
+  - Added explicit scrape jobs in:
+    - `observability/prometheus/prometheus.yaml`
+    - `observability/prometheus/prometheus-configmap.yaml`
+- Expected result after sync/redeploy:
+  - Prometheus targets for product/order become UP.
+  - Grafana dashboards start showing HTTP/JVM/Kafka metrics after traffic.
