@@ -363,3 +363,17 @@ Operational Note:
 - Expected result after Argo sync/redeploy:
   - Services appear in Jaeger dropdown.
   - Traces visible for product/order requests.
+
+## 2026-02-19 - Add ready-made Grafana dashboards (JVM/HTTP/Kafka)
+- Added dashboard provisioning for Grafana using file-based providers.
+- Added prebuilt dashboard ConfigMap with 3 dashboards:
+  - `LeninKart JVM Overview`
+  - `LeninKart HTTP Overview`
+  - `LeninKart Kafka Overview`
+- Updated Grafana deployments to mount:
+  - datasource provisioning
+  - dashboard provider provisioning
+  - dashboard JSON files
+- Note:
+  - Panels show data only for metrics currently present in Prometheus.
+  - If Kafka/JVM series are missing, update scrape pipeline accordingly.
