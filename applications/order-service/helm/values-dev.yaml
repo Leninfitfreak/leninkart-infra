@@ -28,12 +28,13 @@ livenessProbe:
   failureThreshold: 10
 resources:
   requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 300m
+    cpu: 150m
     memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 768Mi
 env:
+  JAVA_TOOL_OPTIONS: "-XX:InitialRAMPercentage=25 -XX:MaxRAMPercentage=70 -XX:+UseContainerSupport"
   # ---------- DATABASE ----------
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
   SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect

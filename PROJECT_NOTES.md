@@ -420,3 +420,22 @@ Operational Note:
 ### Follow-up expected after Argo sync
 - Order service rollout with new probe behavior.
 - Fewer/no intermittent `503` errors on `/api/orders`.
+## 2026-02-19 17:18 - Order service intermittent 503 (OOM / no healthy upstream)
+
+### Issue observed
+- Frontend `/api/orders` calls intermittently returned `503`.
+- Istio ingress logs showed `503 UH no_healthy_upstream`.
+- Order pod showed `Last State: OOMKilled` and repeated health probe failures during restart windows.
+
+### Declarative fix applied (infra)
+- Updated `applications/order-service/helm/values-dev.yaml`:
+  - Increased pod resources:
+    - requests: `cpu 150m`, `memory 256Mi`
+    - limits: `cpu 500m`, `memory 768Mi`
+  - Added JVM container memory tuning:
+    - `JAVA_TOOL_OPTIONS=-XX:InitialRAMPercentage=25 -XX:MaxRAMPercentage=70 -XX:+UseContainerSupport`
+
+### Why
+- `503 UH` was caused by periods where order-service had no healthy endpoint.
+- OOM restart cycles made service temporarily unavailable behind Istio.
+- Higher memory + JVM cap reduces OOM and keeps endpoint healthy.
