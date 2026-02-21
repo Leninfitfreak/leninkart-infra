@@ -19,7 +19,7 @@ spec:
       serviceAccountName: ai-observer
       containers:
         - name: ai-observer
-          image: ghcr.io/leninfitfreak/ai-observer-agent:dev
+          image: docker.io/leninfitfreak/ai-observer-agent:sha-e82f960
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
