@@ -597,3 +597,19 @@ Operational Note:
   - New env option: `OUTPUT_MODE` (`json`, `text`, `both`; default `both`).
 - Updated `platform/ai-observer/base/deployment.yaml`:
   - Added pod-template annotation `ai-observer/config-version: "v2-nl-summary"` to trigger rollout declaratively via Argo CD.
+
+## 2026-02-21 10:05 - Grafana dashboard overhaul (stable + production-friendly)
+
+### Issue
+- Grafana was repeatedly logging: `failed to save dashboard ... Unique identifier needed to be able to get a dashboard`.
+- Existing dashboards were basic and missing a unified platform view.
+
+### Fix
+- Replaced `observability/grafana/grafana-dashboards.yaml` with curated dashboards using fixed `uid` values.
+- Added/updated dashboards:
+  - `LeninKart Platform Overview` (`uid: leninkart-platform-overview`)
+  - `LeninKart JVM Overview` (`uid: leninkart-jvm-overview`)
+  - `LeninKart HTTP Overview` (`uid: leninkart-http-overview`)
+  - `LeninKart Kafka Overview` (`uid: leninkart-kafka-overview`)
+  - `LeninKart AI Observer` (`uid: leninkart-ai-observer`)
+- Included Loki-backed panels for AI observer alert/recommendation visibility.

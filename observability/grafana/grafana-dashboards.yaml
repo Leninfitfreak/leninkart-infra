@@ -4,22 +4,132 @@ metadata:
   name: grafana-dashboards
   namespace: dev
 data:
+  platform-overview.json: |
+    {
+      "uid": "leninkart-platform-overview",
+      "title": "LeninKart Platform Overview",
+      "tags": ["leninkart", "platform"],
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "10s",
+      "time": {"from": "now-1h", "to": "now"},
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Targets Up",
+          "datasource": "Prometheus",
+          "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0},
+          "targets": [{"refId": "A", "expr": "sum(up{job=~\"product-service|order-service|otel\"})"}]
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "HTTP Req/s (5m)",
+          "datasource": "Prometheus",
+          "gridPos": {"h": 5, "w": 6, "x": 6, "y": 0},
+          "targets": [{"refId": "A", "expr": "sum(rate(http_server_requests_seconds_count[5m]))"}]
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "5xx Ratio (5m)",
+          "datasource": "Prometheus",
+          "gridPos": {"h": 5, "w": 6, "x": 12, "y": 0},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count[5m])), 0.000001)"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "p95 Latency (s, 5m)",
+          "datasource": "Prometheus",
+          "gridPos": {"h": 5, "w": 6, "x": 18, "y": 0},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le))"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "HTTP Request Rate by Job",
+          "type": "timeseries",
+          "datasource": "Prometheus",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5},
+          "targets": [
+            {
+              "expr": "sum(rate(http_server_requests_seconds_count[5m])) by (job)",
+              "legendFormat": "{{job}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "title": "HTTP 95th Latency by Job",
+          "type": "timeseries",
+          "datasource": "Prometheus",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5},
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, job))",
+              "legendFormat": "{{job}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "title": "5xx Rate by Job",
+          "type": "timeseries",
+          "datasource": "Prometheus",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 13},
+          "targets": [
+            {
+              "expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) by (job)",
+              "legendFormat": "{{job}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "title": "AI Observer Critical/Warning (5m)",
+          "type": "timeseries",
+          "datasource": "Loki",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 13},
+          "targets": [
+            {
+              "expr": "sum(count_over_time({namespace=\"dev\",app=\"ai-observer\"} | json | severity=~\"warning|critical\" [5m]))",
+              "refId": "A"
+            }
+          ]
+        }
+      ]
+    }
+
   jvm-overview.json: |
     {
-      "annotations": {"list": []},
-      "editable": true,
-      "fiscalYearStartMonth": 0,
-      "graphTooltip": 0,
-      "id": null,
-      "links": [],
-      "liveNow": false,
+      "uid": "leninkart-jvm-overview",
+      "title": "LeninKart JVM Overview",
+      "tags": ["leninkart", "jvm"],
+      "schemaVersion": 39,
+      "version": 2,
+      "refresh": "10s",
+      "time": {"from": "now-1h", "to": "now"},
       "panels": [
         {
           "id": 1,
           "title": "JVM Live Threads",
           "type": "timeseries",
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
-          "targets": [{"expr": "sum(jvm_threads_live_threads)", "refId": "A"}],
+          "targets": [{"expr": "sum(jvm_threads_live_threads) by (job)", "legendFormat": "{{job}}", "refId": "A"}],
           "datasource": "Prometheus"
         },
         {
@@ -27,7 +137,7 @@ data:
           "title": "Heap Memory Used (MB)",
           "type": "timeseries",
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-          "targets": [{"expr": "sum(jvm_memory_used_bytes{area=\"heap\"}) / 1024 / 1024", "refId": "A"}],
+          "targets": [{"expr": "sum(jvm_memory_used_bytes{area=\"heap\"}) by (job) / 1024 / 1024", "legendFormat": "{{job}}", "refId": "A"}],
           "datasource": "Prometheus"
         },
         {
@@ -35,7 +145,7 @@ data:
           "title": "JVM GC Pause Count (5m rate)",
           "type": "timeseries",
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
-          "targets": [{"expr": "sum(rate(jvm_gc_pause_seconds_count[5m]))", "refId": "A"}],
+          "targets": [{"expr": "sum(rate(jvm_gc_pause_seconds_count[5m])) by (job)", "legendFormat": "{{job}}", "refId": "A"}],
           "datasource": "Prometheus"
         },
         {
@@ -43,39 +153,28 @@ data:
           "title": "Process CPU Usage",
           "type": "timeseries",
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
-          "targets": [{"expr": "sum(process_cpu_usage)", "refId": "A"}],
+          "targets": [{"expr": "sum(process_cpu_usage) by (job)", "legendFormat": "{{job}}", "refId": "A"}],
           "datasource": "Prometheus"
         }
-      ],
-      "refresh": "10s",
-      "schemaVersion": 39,
-      "style": "dark",
-      "tags": ["leninkart", "jvm"],
-      "templating": {"list": []},
-      "time": {"from": "now-1h", "to": "now"},
-      "timepicker": {},
-      "timezone": "browser",
-      "title": "LeninKart JVM Overview",
-      "version": 1,
-      "weekStart": ""
+      ]
     }
 
   http-overview.json: |
     {
-      "annotations": {"list": []},
-      "editable": true,
-      "fiscalYearStartMonth": 0,
-      "graphTooltip": 0,
-      "id": null,
-      "links": [],
-      "liveNow": false,
+      "uid": "leninkart-http-overview",
+      "title": "LeninKart HTTP Overview",
+      "tags": ["leninkart", "http"],
+      "schemaVersion": 39,
+      "version": 2,
+      "refresh": "10s",
+      "time": {"from": "now-1h", "to": "now"},
       "panels": [
         {
           "id": 1,
           "title": "HTTP Request Rate (req/s)",
           "type": "timeseries",
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
-          "targets": [{"expr": "sum(rate(http_server_requests_seconds_count[5m]))", "refId": "A"}],
+          "targets": [{"expr": "sum(rate(http_server_requests_seconds_count[5m])) by (job)", "legendFormat": "{{job}}", "refId": "A"}],
           "datasource": "Prometheus"
         },
         {
@@ -85,7 +184,8 @@ data:
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, job))",
+              "legendFormat": "{{job}}",
               "refId": "A"
             }
           ],
@@ -98,36 +198,25 @@ data:
           "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
           "targets": [
             {
-              "expr": "sum(rate(http_server_requests_seconds_count[5m])) by (status)",
-              "legendFormat": "status {{status}}",
+              "expr": "sum(rate(http_server_requests_seconds_count[5m])) by (job,status)",
+              "legendFormat": "{{job}} status {{status}}",
               "refId": "A"
             }
           ],
           "datasource": "Prometheus"
         }
-      ],
-      "refresh": "10s",
-      "schemaVersion": 39,
-      "style": "dark",
-      "tags": ["leninkart", "http"],
-      "templating": {"list": []},
-      "time": {"from": "now-1h", "to": "now"},
-      "timepicker": {},
-      "timezone": "browser",
-      "title": "LeninKart HTTP Overview",
-      "version": 1,
-      "weekStart": ""
+      ]
     }
 
   kafka-overview.json: |
     {
-      "annotations": {"list": []},
-      "editable": true,
-      "fiscalYearStartMonth": 0,
-      "graphTooltip": 0,
-      "id": null,
-      "links": [],
-      "liveNow": false,
+      "uid": "leninkart-kafka-overview",
+      "title": "LeninKart Kafka Overview",
+      "tags": ["leninkart", "kafka"],
+      "schemaVersion": 39,
+      "version": 2,
+      "refresh": "10s",
+      "time": {"from": "now-1h", "to": "now"},
       "panels": [
         {
           "id": 1,
@@ -184,16 +273,57 @@ data:
           ],
           "datasource": "Prometheus"
         }
-      ],
-      "refresh": "10s",
+      ]
+    }
+
+  ai-observer-overview.json: |
+    {
+      "uid": "leninkart-ai-observer",
+      "title": "LeninKart AI Observer",
+      "tags": ["leninkart", "ai-observer", "loki"],
       "schemaVersion": 39,
-      "style": "dark",
-      "tags": ["leninkart", "kafka"],
-      "templating": {"list": []},
-      "time": {"from": "now-1h", "to": "now"},
-      "timepicker": {},
-      "timezone": "browser",
-      "title": "LeninKart Kafka Overview",
       "version": 1,
-      "weekStart": ""
+      "refresh": "10s",
+      "time": {"from": "now-1h", "to": "now"},
+      "panels": [
+        {
+          "id": 1,
+          "title": "Critical/Warning Events (5m)",
+          "type": "timeseries",
+          "datasource": "Loki",
+          "gridPos": {"h": 7, "w": 12, "x": 0, "y": 0},
+          "targets": [
+            {
+              "expr": "sum(count_over_time({namespace=\"dev\", app=\"ai-observer\"} | json | severity=~\"warning|critical\" [5m]))",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Total Observer Reports (5m)",
+          "type": "timeseries",
+          "datasource": "Loki",
+          "gridPos": {"h": 7, "w": 12, "x": 12, "y": 0},
+          "targets": [
+            {
+              "expr": "sum(count_over_time({namespace=\"dev\", app=\"ai-observer\"} [5m]))",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Recommendations Stream",
+          "type": "logs",
+          "datasource": "Loki",
+          "gridPos": {"h": 11, "w": 24, "x": 0, "y": 7},
+          "targets": [
+            {
+              "expr": "{namespace=\"dev\", app=\"ai-observer\"} |= \"[AI-OBSERVER][recommendation]\"",
+              "refId": "A"
+            }
+          ]
+        }
+      ]
     }
