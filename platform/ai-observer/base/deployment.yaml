@@ -17,6 +17,10 @@ spec:
         ai-observer/config-version: "v4-fastapi-webhook-agent"
     spec:
       serviceAccountName: ai-observer
+      hostAliases:
+        - ip: "192.168.49.1"
+          hostnames:
+            - "host.minikube.internal"
       containers:
         - name: ai-observer
           image: docker.io/leninfitfreak/ai-observer-agent:sha-e82f960
