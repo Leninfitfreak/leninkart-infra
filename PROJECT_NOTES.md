@@ -573,6 +573,7 @@ Operational Note:
   - `argocd/applications/dev/loki.yaml`
   - `argocd/applications/dev/promtail.yaml`
   - Added `targetRevision: "*"` for Helm chart sources.
+  - Added required Loki chart filesystem storage and bucketNames values to satisfy chart template validation.
 - Updated AI observer:
   - `platform/ai-observer/base/deployment.yaml`
   - `platform/ai-observer/base/configmap-script.yaml`
