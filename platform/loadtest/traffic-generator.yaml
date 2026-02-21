@@ -7,11 +7,50 @@ data:
   run.sh: |
     #!/bin/sh
     set -eu
+    FRONTEND_BASE="${FRONTEND_BASE:-http://leninkart-frontend.dev.svc.cluster.local}"
+    USER_EMAIL="${USER_EMAIL:-leninfitfreak@gmail.com}"
+    USER_PASSWORD="${USER_PASSWORD:-leninfitfreak}"
+
+    login() {
+      resp="$(curl -sS -X POST "$FRONTEND_BASE/auth/login" \
+        -H "Content-Type: application/json" \
+        -d "{\"email\":\"$USER_EMAIL\",\"password\":\"$USER_PASSWORD\"}" || true)"
+      echo "$resp" | sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+    }
+
+    TOKEN=""
+
     while true; do
-      wget -q -O- http://leninkart-frontend.dev.svc.cluster.local/ >/dev/null 2>&1 || true
-      wget -q -O- http://leninkart-product-service.dev.svc.cluster.local:8081/api/products >/dev/null 2>&1 || true
-      wget -q -O- http://leninkart-order-service.dev.svc.cluster.local:8080/api/orders >/dev/null 2>&1 || true
-      sleep 1
+      # Frontend/UI traffic
+      curl -sS "$FRONTEND_BASE/" >/dev/null 2>&1 || true
+
+      # Refresh token when missing/expired
+      if [ -z "$TOKEN" ]; then
+        TOKEN="$(login)"
+      fi
+
+      if [ -n "$TOKEN" ]; then
+        ts="$(date +%s)"
+        price=$(( (ts % 5000) + 100 ))
+        payload="{\"name\":\"lt-item-$ts\",\"price\":$price,\"description\":\"loadtest generated item $ts\"}"
+
+        # Product creation + reads (drives app traces/DB; and Kafka in event flow)
+        code="$(curl -sS -o /tmp/lt-post.out -w "%{http_code}" \
+          -X POST "$FRONTEND_BASE/api/products" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "$payload" || true)"
+
+        # If unauthorized, force re-login next iteration
+        if [ "$code" = "401" ] || [ "$code" = "403" ]; then
+          TOKEN=""
+        fi
+
+        curl -sS "$FRONTEND_BASE/api/products" -H "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || true
+        curl -sS "$FRONTEND_BASE/api/orders" -H "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || true
+      fi
+
+      sleep 2
     done
 ---
 apiVersion: apps/v1
@@ -33,8 +72,15 @@ spec:
     spec:
       containers:
         - name: traffic-generator
-          image: busybox:1.36
+          image: curlimages/curl:8.11.0
           command: ["/bin/sh", "/scripts/run.sh"]
+          env:
+            - name: FRONTEND_BASE
+              value: "http://leninkart-frontend.dev.svc.cluster.local"
+            - name: USER_EMAIL
+              value: "leninfitfreak@gmail.com"
+            - name: USER_PASSWORD
+              value: "leninfitfreak"
           resources:
             requests:
               cpu: 20m

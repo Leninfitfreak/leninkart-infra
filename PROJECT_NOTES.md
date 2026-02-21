@@ -625,3 +625,19 @@ Operational Note:
   - `sum(rate(kafka_consumer_fetch_manager_bytes_consumed_total[5m])) by (client_id)`
   - `max(kafka_consumer_fetch_manager_records_lag_max) by (client_id)`
   - `count(kafka_app_info_start_time_ms)` as Kafka client visibility panel.
+
+## 2026-02-21 10:35 - Loadtest upgraded to authenticated end-to-end frontend traffic
+
+### Issue
+- Previous loadtest only did unauthenticated GETs and did not reliably exercise full auth + app flow.
+
+### Fix
+- Updated `platform/loadtest/traffic-generator.yaml`:
+  - Switched image from `busybox` to `curlimages/curl:8.11.0`.
+  - Added login flow (`POST /auth/login`) and bearer token extraction.
+  - Added authenticated product create/read and orders read through frontend endpoint.
+  - Added token refresh behavior on `401/403`.
+  - Added env vars:
+    - `FRONTEND_BASE`
+    - `USER_EMAIL`
+    - `USER_PASSWORD`
