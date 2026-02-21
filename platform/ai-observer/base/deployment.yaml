@@ -32,6 +32,9 @@ spec:
           envFrom:
             - configMapRef:
                 name: ai-observer-env
+            - secretRef:
+                name: ai-observer-secrets
+                optional: true
           readinessProbe:
             httpGet:
               path: /healthz
