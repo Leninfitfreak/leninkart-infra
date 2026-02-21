@@ -14,7 +14,7 @@ spec:
       labels:
         app: ai-observer
       annotations:
-        ai-observer/config-version: "v2-nl-summary"
+        ai-observer/config-version: "v3-recommendation-dedup"
     spec:
       serviceAccountName: ai-observer
       containers:
@@ -33,6 +33,8 @@ spec:
               value: "product-service,order-service,otel"
             - name: LOKI_ERROR_QUERY
               value: '{namespace="dev"} |= "ERROR"'
+            - name: RECOMMENDATION_COOLDOWN_SECONDS
+              value: "600"
           resources:
             requests:
               cpu: 200m

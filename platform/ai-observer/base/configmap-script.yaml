@@ -17,6 +17,7 @@ data:
     MONITORED_JOBS = [j.strip() for j in os.getenv("MONITORED_JOBS", "product-service,order-service,otel").split(",") if j.strip()]
     LOG_QUERY = os.getenv("LOKI_ERROR_QUERY", '{namespace="dev"} |= "ERROR"')
     OUTPUT_MODE = os.getenv("OUTPUT_MODE", "both").lower()  # json | text | both
+    RECOMMENDATION_COOLDOWN_SECONDS = int(os.getenv("RECOMMENDATION_COOLDOWN_SECONDS", "600"))
 
     RULES_PATH = "/config/rules.json"
 
@@ -208,9 +209,23 @@ data:
     def main():
       rules = load_rules()
       interval = int(rules.get("interval_seconds", 60))
+      last_emitted = {}
       while True:
         try:
           report = evaluate(rules)
+          now_ts = time.time()
+          filtered_recs = []
+          for rec in report.get("recommendations", []):
+            last_ts = last_emitted.get(rec, 0)
+            if (now_ts - last_ts) >= RECOMMENDATION_COOLDOWN_SECONDS:
+              filtered_recs.append(rec)
+              last_emitted[rec] = now_ts
+          report["recommendations"] = filtered_recs
+          # Keep dedup map bounded for long-running processes.
+          if len(last_emitted) > 200:
+            cutoff = now_ts - (RECOMMENDATION_COOLDOWN_SECONDS * 2)
+            last_emitted = {k: v for k, v in last_emitted.items() if v >= cutoff}
+
           if OUTPUT_MODE in ("text", "both"):
             print(f"[AI-OBSERVER] severity={report['severity']} summary={report['human_summary']}")
             for r in report.get("recommendations", []):
