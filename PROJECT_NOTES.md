@@ -506,3 +506,15 @@ Operational Note:
 ### Notes
 - Local `mvn` validation could not be run from this machine because `mvn` is not installed in PATH.
 - Next expected flow: GitHub Actions build/push images and infra tag update pipeline.
+## 2026-02-20 21:58 - Added declarative load generator (Argo-managed)
+
+### Added
+- `platform/loadtest/traffic-generator.yaml`
+  - ConfigMap script loops requests to frontend/product/order endpoints.
+  - Deployment `traffic-generator` in `dev` namespace with `replicas: 1`.
+- `argocd/applications/dev/loadtest.yaml`
+  - Argo CD Application to deploy `platform/loadtest` declaratively.
+
+### How to control load (GitOps)
+- Increase traffic: raise `spec.replicas` in `platform/loadtest/traffic-generator.yaml`.
+- Stop traffic: set `spec.replicas: 0`.

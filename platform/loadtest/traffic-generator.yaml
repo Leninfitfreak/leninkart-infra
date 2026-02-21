@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: traffic-generator-script
+  namespace: dev
+data:
+  run.sh: |
+    #!/bin/sh
+    set -eu
+    while true; do
+      wget -q -O- http://leninkart-frontend.dev.svc.cluster.local/ >/dev/null 2>&1 || true
+      wget -q -O- http://leninkart-product-service.dev.svc.cluster.local:8081/api/products >/dev/null 2>&1 || true
+      wget -q -O- http://leninkart-order-service.dev.svc.cluster.local:8080/api/orders >/dev/null 2>&1 || true
+      sleep 1
+    done
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-generator
+  namespace: dev
+  labels:
+    app: traffic-generator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traffic-generator
+  template:
+    metadata:
+      labels:
+        app: traffic-generator
+    spec:
+      containers:
+        - name: traffic-generator
+          image: busybox:1.36
+          command: ["/bin/sh", "/scripts/run.sh"]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+      volumes:
+        - name: script
+          configMap:
+            name: traffic-generator-script
+            defaultMode: 0755
