@@ -11,9 +11,9 @@ data:
     from urllib.parse import urlencode
     from urllib.request import urlopen, Request
 
-    PROM_URL = os.getenv("PROM_URL", "http://prometheus.dev.svc.cluster.local:9090")
-    LOKI_URL = os.getenv("LOKI_URL", "http://loki.dev.svc.cluster.local:3100")
-    JAEGER_URL = os.getenv("JAEGER_URL", "http://jaeger-query.dev.svc.cluster.local:16686")
+    PROM_URL = os.getenv("PROM_URL", "http://prometheus:9090")
+    LOKI_URL = os.getenv("LOKI_URL", "http://loki:3100")
+    JAEGER_URL = os.getenv("JAEGER_URL", "http://jaeger-query:16686")
     MONITORED_JOBS = [j.strip() for j in os.getenv("MONITORED_JOBS", "product-service,order-service,otel").split(",") if j.strip()]
     LOG_QUERY = os.getenv("LOKI_ERROR_QUERY", '{namespace="dev"} |= "ERROR"')
 
@@ -101,17 +101,28 @@ data:
         })
         severity = "warning" if severity == "info" else severity
 
-      log_errors = loki_error_count(LOG_QUERY, int(rules["log_window_minutes"]))
-      if log_errors > 0:
-        findings.append({
-          "level": "info",
-          "kind": "logs",
-          "count": log_errors,
-          "window_minutes": rules["log_window_minutes"],
-          "msg": "error logs detected"
-        })
+      log_errors = None
+      try:
+        log_errors = loki_error_count(LOG_QUERY, int(rules["log_window_minutes"]))
+        if log_errors > 0:
+          findings.append({
+            "level": "info",
+            "kind": "logs",
+            "count": log_errors,
+            "window_minutes": rules["log_window_minutes"],
+            "msg": "error logs detected"
+          })
+      except Exception as e:
+        findings.append({"level": "warning", "kind": "logs", "msg": f"loki query failed: {e}"})
+        severity = "warning" if severity == "info" else severity
 
-      jaeger_ok = jaeger_reachable()
+      jaeger_ok = False
+      try:
+        jaeger_ok = jaeger_reachable()
+      except Exception as e:
+        findings.append({"level": "warning", "kind": "tracing", "msg": f"jaeger query failed: {e}"})
+        severity = "warning" if severity == "info" else severity
+
       if not jaeger_ok:
         findings.append({"level": "warning", "kind": "tracing", "msg": "jaeger API unreachable"})
         severity = "warning" if severity == "info" else severity
@@ -122,7 +133,8 @@ data:
         "jobs": up_states,
         "error_ratio_5m": err_ratio,
         "latency_p95_s_5m": p95,
-        "findings": findings
+        "findings": findings,
+        "log_errors_5m": log_errors
       }
 
     def main():
@@ -138,4 +150,3 @@ data:
 
     if __name__ == "__main__":
       main()
-

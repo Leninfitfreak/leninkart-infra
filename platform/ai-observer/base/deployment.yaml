@@ -22,11 +22,11 @@ spec:
           command: ["python", "-u", "/app/observer.py"]
           env:
             - name: PROM_URL
-              value: "http://prometheus.dev.svc.cluster.local:9090"
+              value: "http://prometheus:9090"
             - name: LOKI_URL
-              value: "http://loki.dev.svc.cluster.local:3100"
+              value: "http://loki:3100"
             - name: JAEGER_URL
-              value: "http://jaeger-query.dev.svc.cluster.local:16686"
+              value: "http://jaeger-query:16686"
             - name: MONITORED_JOBS
               value: "product-service,order-service,otel"
             - name: LOKI_ERROR_QUERY
@@ -50,4 +50,3 @@ spec:
         - name: config
           configMap:
             name: ai-observer-rules
-

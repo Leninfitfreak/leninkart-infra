@@ -562,3 +562,19 @@ Operational Note:
 
 ### Portability
 - Reuse by copying `platform/ai-observer/` and creating a new overlay with target URLs/jobs.
+## 2026-02-21 00:08 - Fix AI observer DNS failures + Loki/Promtail Argo source revision
+
+### Issue
+- `ai-observer` logs showed `Name does not resolve`.
+- Argo apps `loki-dev` and `promtail-dev` were `Unknown` due missing `targetRevision`.
+
+### Fixes
+- Updated:
+  - `argocd/applications/dev/loki.yaml`
+  - `argocd/applications/dev/promtail.yaml`
+  - Added `targetRevision: "*"` for Helm chart sources.
+- Updated AI observer:
+  - `platform/ai-observer/base/deployment.yaml`
+  - `platform/ai-observer/base/configmap-script.yaml`
+  - Switched service URLs to in-namespace DNS (`http://prometheus:9090`, `http://loki:3100`, `http://jaeger-query:16686`).
+  - Made Loki/Jaeger checks non-fatal so observer still reports instead of crashing loop.
