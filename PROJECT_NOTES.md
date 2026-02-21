@@ -538,3 +538,27 @@ Operational Note:
 - Query example:
   - `{namespace="dev"}`
   - `{namespace="dev", app="product-service"} |= "ERROR"`
+## 2026-02-20 22:35 - Added reusable AI observer scaffold (Argo-managed)
+
+### Added folder structure
+- `platform/ai-observer/README.md`
+- `platform/ai-observer/base/`
+  - `kustomization.yaml`
+  - `serviceaccount.yaml`
+  - `configmap-rules.yaml`
+  - `configmap-script.yaml` (Python observer loop)
+  - `deployment.yaml`
+- `platform/ai-observer/overlays/dev/kustomization.yaml`
+- `argocd/applications/dev/ai-observer.yaml`
+
+### Behavior
+- Periodically checks:
+  - Prometheus `up` per job
+  - HTTP 5xx ratio
+  - HTTP p95 latency
+  - Loki error logs in recent window
+  - Jaeger API reachability
+- Prints structured JSON findings to pod logs.
+
+### Portability
+- Reuse by copying `platform/ai-observer/` and creating a new overlay with target URLs/jobs.

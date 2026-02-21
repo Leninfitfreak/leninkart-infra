@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-observer-rules
+data:
+  rules.json: |
+    {
+      "interval_seconds": 60,
+      "error_rate_threshold": 0.05,
+      "latency_p95_threshold_seconds": 0.75,
+      "log_window_minutes": 5
+    }
+

@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-observer
+  labels:
+    app: ai-observer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-observer
+  template:
+    metadata:
+      labels:
+        app: ai-observer
+    spec:
+      serviceAccountName: ai-observer
+      containers:
+        - name: ai-observer
+          image: python:3.11-alpine
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-u", "/app/observer.py"]
+          env:
+            - name: PROM_URL
+              value: "http://prometheus.dev.svc.cluster.local:9090"
+            - name: LOKI_URL
+              value: "http://loki.dev.svc.cluster.local:3100"
+            - name: JAEGER_URL
+              value: "http://jaeger-query.dev.svc.cluster.local:16686"
+            - name: MONITORED_JOBS
+              value: "product-service,order-service,otel"
+            - name: LOKI_ERROR_QUERY
+              value: '{namespace="dev"} |= "ERROR"'
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: script
+              mountPath: /app
+            - name: config
+              mountPath: /config
+      volumes:
+        - name: script
+          configMap:
+            name: ai-observer-script
+        - name: config
+          configMap:
+            name: ai-observer-rules
+

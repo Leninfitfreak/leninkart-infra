@@ -1,0 +1,141 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-observer-script
+data:
+  observer.py: |
+    import json
+    import os
+    import time
+    from datetime import datetime, timezone
+    from urllib.parse import urlencode
+    from urllib.request import urlopen, Request
+
+    PROM_URL = os.getenv("PROM_URL", "http://prometheus.dev.svc.cluster.local:9090")
+    LOKI_URL = os.getenv("LOKI_URL", "http://loki.dev.svc.cluster.local:3100")
+    JAEGER_URL = os.getenv("JAEGER_URL", "http://jaeger-query.dev.svc.cluster.local:16686")
+    MONITORED_JOBS = [j.strip() for j in os.getenv("MONITORED_JOBS", "product-service,order-service,otel").split(",") if j.strip()]
+    LOG_QUERY = os.getenv("LOKI_ERROR_QUERY", '{namespace="dev"} |= "ERROR"')
+
+    RULES_PATH = "/config/rules.json"
+
+    def now_iso():
+      return datetime.now(timezone.utc).isoformat()
+
+    def http_get_json(url):
+      req = Request(url, headers={"Accept": "application/json"})
+      with urlopen(req, timeout=8) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+    def prom_query(query):
+      qs = urlencode({"query": query})
+      data = http_get_json(f"{PROM_URL}/api/v1/query?{qs}")
+      return data.get("data", {}).get("result", [])
+
+    def prom_scalar(query):
+      result = prom_query(query)
+      if not result:
+        return None
+      return float(result[0]["value"][1])
+
+    def loki_error_count(query, minutes):
+      end_ns = int(time.time() * 1e9)
+      start_ns = int((time.time() - (minutes * 60)) * 1e9)
+      params = {
+        "query": query,
+        "start": str(start_ns),
+        "end": str(end_ns),
+        "limit": "500"
+      }
+      data = http_get_json(f"{LOKI_URL}/loki/api/v1/query_range?{urlencode(params)}")
+      streams = data.get("data", {}).get("result", [])
+      return sum(len(s.get("values", [])) for s in streams)
+
+    def jaeger_reachable():
+      data = http_get_json(f"{JAEGER_URL}/api/services")
+      return isinstance(data.get("data", []), list)
+
+    def load_rules():
+      with open(RULES_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+    def evaluate(rules):
+      findings = []
+      severity = "info"
+
+      up_states = {}
+      for job in MONITORED_JOBS:
+        res = prom_query(f'up{{job="{job}"}}')
+        val = None if not res else float(res[0]["value"][1])
+        up_states[job] = val
+        if val is None:
+          findings.append({"level": "warning", "kind": "availability", "job": job, "msg": "missing up series"})
+          severity = "warning" if severity == "info" else severity
+        elif val < 1:
+          findings.append({"level": "critical", "kind": "availability", "job": job, "msg": "target down"})
+          severity = "critical"
+
+      err_ratio = prom_scalar(
+        'sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) / sum(rate(http_server_requests_seconds_count[5m]))'
+      )
+      if err_ratio is not None and err_ratio > float(rules["error_rate_threshold"]):
+        findings.append({
+          "level": "warning",
+          "kind": "error_rate",
+          "value": err_ratio,
+          "threshold": rules["error_rate_threshold"],
+          "msg": "5xx ratio above threshold"
+        })
+        severity = "warning" if severity == "info" else severity
+
+      p95 = prom_scalar(
+        'histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le))'
+      )
+      if p95 is not None and p95 > float(rules["latency_p95_threshold_seconds"]):
+        findings.append({
+          "level": "warning",
+          "kind": "latency",
+          "value_seconds": p95,
+          "threshold_seconds": rules["latency_p95_threshold_seconds"],
+          "msg": "p95 latency above threshold"
+        })
+        severity = "warning" if severity == "info" else severity
+
+      log_errors = loki_error_count(LOG_QUERY, int(rules["log_window_minutes"]))
+      if log_errors > 0:
+        findings.append({
+          "level": "info",
+          "kind": "logs",
+          "count": log_errors,
+          "window_minutes": rules["log_window_minutes"],
+          "msg": "error logs detected"
+        })
+
+      jaeger_ok = jaeger_reachable()
+      if not jaeger_ok:
+        findings.append({"level": "warning", "kind": "tracing", "msg": "jaeger API unreachable"})
+        severity = "warning" if severity == "info" else severity
+
+      return {
+        "ts": now_iso(),
+        "severity": severity,
+        "jobs": up_states,
+        "error_ratio_5m": err_ratio,
+        "latency_p95_s_5m": p95,
+        "findings": findings
+      }
+
+    def main():
+      rules = load_rules()
+      interval = int(rules.get("interval_seconds", 60))
+      while True:
+        try:
+          report = evaluate(rules)
+          print(json.dumps(report, separators=(",", ":")))
+        except Exception as e:
+          print(json.dumps({"ts": now_iso(), "severity": "error", "msg": "observer failure", "error": str(e)}))
+        time.sleep(interval)
+
+    if __name__ == "__main__":
+      main()
+
