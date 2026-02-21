@@ -470,3 +470,19 @@ Operational Note:
 - `/auth/signup` creates user row in DB.
 - `/auth/login` validates credentials against DB user.
 - JWT is issued from DB user identity (`userId`, `role`), then consumed by product/order APIs.
+## 2026-02-20 21:17 - Disable startup auth seeding to stop product-service crash
+
+### Issue
+- Product API returned `503` from gateway.
+- Product pod entered crash loop due startup seed failure:
+  - duplicate key on `users.username` for `leninfitfreak@gmail.com`.
+
+### Declarative fix
+- Set `APP_AUTH_USERS: ""` explicitly in:
+  - `applications/product-service/helm/values-dev.yaml`
+  - `applications/order-service/helm/values-dev.yaml`
+
+### Why
+- Service had fallback seeding via `app.auth.users` property.
+- Explicit empty disables startup seed insert attempts and avoids duplicate user crash.
+- Auth flow remains DB-backed through signup/login data.
