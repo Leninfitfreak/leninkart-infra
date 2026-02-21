@@ -580,3 +580,20 @@ Operational Note:
   - `platform/ai-observer/base/configmap-script.yaml`
   - Switched service URLs to in-namespace DNS (`http://prometheus:9090`, `http://loki:3100`, `http://jaeger-query:16686`).
   - Made Loki/Jaeger checks non-fatal so observer still reports instead of crashing loop.
+
+## 2026-02-21 09:25 - AI observer natural-language summaries and recommendations
+
+### Issue
+- Raw JSON findings are hard to read quickly during troubleshooting.
+
+### Fix
+- Updated `platform/ai-observer/base/configmap-script.yaml`:
+  - Added `human_summary` output in plain language.
+  - Added `recommendations` list with concrete next actions.
+  - Added text output mode with readable log lines:
+    - `[AI-OBSERVER] severity=... summary=...`
+    - `[AI-OBSERVER][recommendation] ...`
+  - Kept JSON output for machine parsing and dashboards.
+  - New env option: `OUTPUT_MODE` (`json`, `text`, `both`; default `both`).
+- Updated `platform/ai-observer/base/deployment.yaml`:
+  - Added pod-template annotation `ai-observer/config-version: "v2-nl-summary"` to trigger rollout declaratively via Argo CD.

@@ -13,6 +13,8 @@ spec:
     metadata:
       labels:
         app: ai-observer
+      annotations:
+        ai-observer/config-version: "v2-nl-summary"
     spec:
       serviceAccountName: ai-observer
       containers:

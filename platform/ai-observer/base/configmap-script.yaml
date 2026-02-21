@@ -16,6 +16,7 @@ data:
     JAEGER_URL = os.getenv("JAEGER_URL", "http://jaeger-query:16686")
     MONITORED_JOBS = [j.strip() for j in os.getenv("MONITORED_JOBS", "product-service,order-service,otel").split(",") if j.strip()]
     LOG_QUERY = os.getenv("LOKI_ERROR_QUERY", '{namespace="dev"} |= "ERROR"')
+    OUTPUT_MODE = os.getenv("OUTPUT_MODE", "both").lower()  # json | text | both
 
     RULES_PATH = "/config/rules.json"
 
@@ -58,6 +59,68 @@ data:
     def load_rules():
       with open(RULES_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
+
+    def build_human_summary(findings, up_states, err_ratio, p95, log_errors):
+      if not findings:
+        jobs_ok = ", ".join([k for k, v in up_states.items() if v is not None and v >= 1])
+        return f"System looks healthy. All monitored targets are up ({jobs_ok}). Error ratio and latency are within thresholds."
+
+      parts = []
+      downs = [f.get("job") for f in findings if f.get("kind") == "availability" and f.get("level") == "critical"]
+      missing = [f.get("job") for f in findings if f.get("kind") == "availability" and "missing up series" in f.get("msg", "")]
+      if downs:
+        parts.append(f"Service availability issue detected: {', '.join(downs)} appears down.")
+      if missing:
+        parts.append(f"Metrics are missing for: {', '.join(missing)}.")
+      if err_ratio is not None:
+        parts.append(f"Current 5xx error ratio (5m) is {err_ratio:.3f}.")
+      if p95 is not None:
+        parts.append(f"Current p95 latency (5m) is {p95:.3f}s.")
+      if log_errors is not None and log_errors > 0:
+        parts.append(f"Found {log_errors} error log lines in the recent log window.")
+      if any(f.get("kind") == "tracing" for f in findings):
+        parts.append("Tracing backend check reported an issue.")
+      return " ".join(parts)
+
+    def build_recommendations(findings):
+      recs = []
+      seen = set()
+      for finding in findings:
+        kind = finding.get("kind")
+        if kind == "availability":
+          job = finding.get("job", "unknown-service")
+          key = f"availability:{job}"
+          if key not in seen:
+            recs.append(
+              f"Verify {job} pods and readiness probes; then check Service/Endpoint wiring. "
+              f"Commands: kubectl -n dev get pods,svc,endpoints | findstr /I \"{job}\""
+            )
+            seen.add(key)
+        elif kind == "error_rate" and "error_rate" not in seen:
+          recs.append(
+            "Investigate failing API paths and recent 5xx logs. "
+            "Start with app logs and Grafana Loki filter for severity=error in the last 15m."
+          )
+          seen.add("error_rate")
+        elif kind == "latency" and "latency" not in seen:
+          recs.append(
+            "Latency is elevated. Check DB/Kafka dependency latency and pod resource saturation "
+            "(CPU throttling/memory pressure). Consider HPA or request/limit tuning."
+          )
+          seen.add("latency")
+        elif kind == "logs" and "logs" not in seen:
+          recs.append(
+            "Correlate repeated error log signatures with trace spans to identify the failing code path quickly."
+          )
+          seen.add("logs")
+        elif kind == "tracing" and "tracing" not in seen:
+          recs.append(
+            "Validate Jaeger and OTEL collector connectivity and service discovery in namespace dev."
+          )
+          seen.add("tracing")
+      if not recs:
+        recs.append("No action needed. Continue monitoring.")
+      return recs
 
     def evaluate(rules):
       findings = []
@@ -127,14 +190,19 @@ data:
         findings.append({"level": "warning", "kind": "tracing", "msg": "jaeger API unreachable"})
         severity = "warning" if severity == "info" else severity
 
+      recommendations = build_recommendations(findings)
+      human_summary = build_human_summary(findings, up_states, err_ratio, p95, log_errors)
+
       return {
         "ts": now_iso(),
         "severity": severity,
+        "human_summary": human_summary,
         "jobs": up_states,
         "error_ratio_5m": err_ratio,
         "latency_p95_s_5m": p95,
         "findings": findings,
-        "log_errors_5m": log_errors
+        "log_errors_5m": log_errors,
+        "recommendations": recommendations
       }
 
     def main():
@@ -143,7 +211,12 @@ data:
       while True:
         try:
           report = evaluate(rules)
-          print(json.dumps(report, separators=(",", ":")))
+          if OUTPUT_MODE in ("text", "both"):
+            print(f"[AI-OBSERVER] severity={report['severity']} summary={report['human_summary']}")
+            for r in report.get("recommendations", []):
+              print(f"[AI-OBSERVER][recommendation] {r}")
+          if OUTPUT_MODE in ("json", "both"):
+            print(json.dumps(report, separators=(",", ":")))
         except Exception as e:
           print(json.dumps({"ts": now_iso(), "severity": "error", "msg": "observer failure", "error": str(e)}))
         time.sleep(interval)
