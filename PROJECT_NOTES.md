@@ -455,3 +455,18 @@ Operational Note:
 ### Expected result
 - Product and order APIs accept the same JWT/user context after rollout.
 - Frontend no longer shows auth error for `/api/products` for that user.
+## 2026-02-20 17:34 - Remove hardcoded auth users (DB-backed signup/login)
+
+### Change
+- Removed `APP_AUTH_USERS` from:
+  - `applications/product-service/helm/values-dev.yaml`
+  - `applications/order-service/helm/values-dev.yaml`
+
+### Reason
+- User accounts must come from `/auth/signup` and database persistence, not static env values in Git.
+- Keeps auth flow aligned with real signup/login behavior and avoids hardcoded credentials in infra.
+
+### Required backend behavior (must already exist)
+- `/auth/signup` creates user row in DB.
+- `/auth/login` validates credentials against DB user.
+- JWT is issued from DB user identity (`userId`, `role`), then consumed by product/order APIs.
