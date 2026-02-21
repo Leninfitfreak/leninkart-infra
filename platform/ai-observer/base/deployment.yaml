@@ -14,27 +14,31 @@ spec:
       labels:
         app: ai-observer
       annotations:
-        ai-observer/config-version: "v3-recommendation-dedup"
+        ai-observer/config-version: "v4-fastapi-webhook-agent"
     spec:
       serviceAccountName: ai-observer
       containers:
         - name: ai-observer
-          image: python:3.11-alpine
+          image: ghcr.io/leninfitfreak/ai-observer-agent:dev
           imagePullPolicy: IfNotPresent
-          command: ["python", "-u", "/app/observer.py"]
-          env:
-            - name: PROM_URL
-              value: "http://prometheus:9090"
-            - name: LOKI_URL
-              value: "http://loki:3100"
-            - name: JAEGER_URL
-              value: "http://jaeger-query:16686"
-            - name: MONITORED_JOBS
-              value: "product-service,order-service,otel"
-            - name: LOKI_ERROR_QUERY
-              value: '{namespace="dev"} |= "ERROR"'
-            - name: RECOMMENDATION_COOLDOWN_SECONDS
-              value: "600"
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: ai-observer-env
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
           resources:
             requests:
               cpu: 200m
@@ -42,15 +46,3 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
-          volumeMounts:
-            - name: script
-              mountPath: /app
-            - name: config
-              mountPath: /config
-      volumes:
-        - name: script
-          configMap:
-            name: ai-observer-script
-        - name: config
-          configMap:
-            name: ai-observer-rules

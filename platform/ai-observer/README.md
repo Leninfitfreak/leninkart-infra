@@ -1,29 +1,102 @@
-# AI Observer (Lightweight)
+# AI Observer (Infra Manifests)
 
-This is a reusable, lightweight observability agent for Kubernetes.
+This folder is infra-only (Kubernetes manifests for GitOps).
 
-It runs in two modes:
-- Detection (implemented): rule-based checks on Prometheus/Loki/Jaeger
-- Assisted remediation (future): human-approved action suggestions
+Application source is in a separate repository:
+- `https://github.com/Leninfitfreak/ai-observer-agent`
 
 ## Structure
 
-- `base/`: reusable manifests + Python observer loop
-- `overlays/dev/`: environment-specific settings (URLs, jobs, namespace)
+```text
+platform/ai-observer/
+  base/
+    serviceaccount.yaml
+    configmap-env.yaml
+    deployment.yaml
+    service.yaml
+    kustomization.yaml
+  overlays/dev/kustomization.yaml
+  alertmanager-webhook-snippet.yaml
+```
 
-## What it does
+## Environment Variables
 
-- Checks service availability (`up`) for monitored jobs
-- Computes 5xx error ratio from HTTP metrics
-- Computes p95 latency from histogram metrics
-- Counts recent error logs from Loki
-- Checks Jaeger API reachability
-- Prints structured JSON summaries to container logs
+- `PROMETHEUS_URL` (default `http://prometheus:9090`)
+- `LOKI_URL` (default `http://loki-gateway:80`)
+- `JAEGER_URL` (default `http://jaeger-query:16686`)
+- `OLLAMA_URL` (default `http://host.minikube.internal:11434`)
+- `DEFAULT_NAMESPACE` (default `dev`)
 
-## Reuse in another project
+## API
 
-1. Copy `platform/ai-observer/`.
-2. Create a new overlay (for example `overlays/staging`).
-3. Patch env vars in overlay to your stack URLs and jobs.
-4. Add one Argo CD `Application` pointing to that overlay path.
+- `GET /healthz`
+- `POST /webhook/alertmanager`
 
+Response shape:
+
+```json
+{
+  "context": {
+    "alert": {},
+    "metrics": {},
+    "logs_summary": "...",
+    "trace_summary": "...",
+    "datasource_errors": {}
+  },
+  "analysis": {
+    "probable_root_cause": "...",
+    "impact_level": "Low|Medium|High",
+    "recommended_remediation": "...",
+    "confidence_score": "85%"
+  }
+}
+```
+
+## Deploy In Minikube
+
+1. Ensure app image is published by app repo workflow:
+- `ghcr.io/leninfitfreak/ai-observer-agent:dev`
+
+2. Apply manifests:
+
+```powershell
+kubectl apply -k platform/ai-observer/overlays/dev
+```
+
+3. Verify:
+
+```powershell
+kubectl -n dev get deploy,pod,svc | findstr /I "ai-observer"
+kubectl -n dev logs deploy/ai-observer --tail=100
+```
+
+## Manual Webhook Test
+
+```powershell
+kubectl -n dev port-forward svc/ai-observer 8080:8080
+```
+
+```powershell
+curl -X POST http://127.0.0.1:8080/webhook/alertmanager `
+  -H "Content-Type: application/json" `
+  -d '{
+    "status":"firing",
+    "receiver":"ai-observer-webhook",
+    "alerts":[
+      {
+        "status":"firing",
+        "labels":{
+          "alertname":"High5xxRate",
+          "namespace":"dev",
+          "service":"order-service",
+          "severity":"critical"
+        },
+        "annotations":{"summary":"Test alert from manual curl"}
+      }
+    ]
+  }'
+```
+
+## Alertmanager Snippet
+
+See `platform/ai-observer/alertmanager-webhook-snippet.yaml` and merge it into your Alertmanager config.

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-observer-env
+data:
+  PROMETHEUS_URL: "http://prometheus:9090"
+  LOKI_URL: "http://loki-gateway:80"
+  JAEGER_URL: "http://jaeger-query:16686"
+  OLLAMA_URL: "http://host.minikube.internal:11434"
+  DEFAULT_NAMESPACE: "dev"

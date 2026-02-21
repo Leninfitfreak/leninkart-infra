@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-observer
+  labels:
+    app: ai-observer
+spec:
+  selector:
+    app: ai-observer
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
