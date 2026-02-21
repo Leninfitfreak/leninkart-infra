@@ -10,6 +10,8 @@ data:
     FRONTEND_BASE="${FRONTEND_BASE:-http://leninkart-frontend.dev.svc.cluster.local}"
     USER_EMAIL="${USER_EMAIL:-leninfitfreak@gmail.com}"
     USER_PASSWORD="${USER_PASSWORD:-leninfitfreak}"
+    PARALLEL_REQUESTS="${PARALLEL_REQUESTS:-4}"
+    LOOP_SLEEP_SECONDS="${LOOP_SLEEP_SECONDS:-1}"
 
     login() {
       resp="$(curl -sS -X POST "$FRONTEND_BASE/auth/login" \
@@ -30,27 +32,39 @@ data:
       fi
 
       if [ -n "$TOKEN" ]; then
-        ts="$(date +%s)"
-        price=$(( (ts % 5000) + 100 ))
-        payload="{\"name\":\"lt-item-$ts\",\"price\":$price,\"description\":\"loadtest generated item $ts\"}"
+        rm -f /tmp/lt-auth-fail
+        i=1
+        while [ "$i" -le "$PARALLEL_REQUESTS" ]; do
+          (
+            ts="$(date +%s)-${i}-$$"
+            price=$(( (i * 173 + $$) % 5000 + 100 ))
+            payload="{\"name\":\"lt-item-$ts\",\"price\":$price,\"description\":\"loadtest generated item $ts\"}"
 
-        # Product creation + reads (drives app traces/DB; and Kafka in event flow)
-        code="$(curl -sS -o /tmp/lt-post.out -w "%{http_code}" \
-          -X POST "$FRONTEND_BASE/api/products" \
-          -H "Authorization: Bearer $TOKEN" \
-          -H "Content-Type: application/json" \
-          -d "$payload" || true)"
+            # Product creation + reads (drives app traces/DB; and Kafka in event flow)
+            code="$(curl -sS -o /tmp/lt-post-$i.out -w "%{http_code}" \
+              -X POST "$FRONTEND_BASE/api/products" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$payload" || true)"
 
-        # If unauthorized, force re-login next iteration
-        if [ "$code" = "401" ] || [ "$code" = "403" ]; then
+            if [ "$code" = "401" ] || [ "$code" = "403" ]; then
+              touch /tmp/lt-auth-fail
+            fi
+
+            curl -sS "$FRONTEND_BASE/api/products" -H "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || true
+            curl -sS "$FRONTEND_BASE/api/orders" -H "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || true
+          ) &
+          i=$((i + 1))
+        done
+        wait
+
+        # If any worker reported unauthorized, force re-login next loop
+        if [ -f /tmp/lt-auth-fail ]; then
           TOKEN=""
         fi
-
-        curl -sS "$FRONTEND_BASE/api/products" -H "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || true
-        curl -sS "$FRONTEND_BASE/api/orders" -H "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || true
       fi
 
-      sleep 2
+      sleep "$LOOP_SLEEP_SECONDS"
     done
 ---
 apiVersion: apps/v1
@@ -61,7 +75,7 @@ metadata:
   labels:
     app: traffic-generator
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: traffic-generator
@@ -81,6 +95,10 @@ spec:
               value: "leninfitfreak@gmail.com"
             - name: USER_PASSWORD
               value: "leninfitfreak"
+            - name: PARALLEL_REQUESTS
+              value: "4"
+            - name: LOOP_SLEEP_SECONDS
+              value: "1"
           resources:
             requests:
               cpu: 20m

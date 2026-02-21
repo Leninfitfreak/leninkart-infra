@@ -641,3 +641,15 @@ Operational Note:
     - `FRONTEND_BASE`
     - `USER_EMAIL`
     - `USER_PASSWORD`
+
+## 2026-02-21 10:50 - Increased synthetic load intensity (declarative)
+
+### Change
+- Updated `platform/loadtest/traffic-generator.yaml` for stronger traffic generation:
+  - Deployment replicas: `1 -> 3`
+  - Added concurrent requests per loop with `PARALLEL_REQUESTS=4`
+  - Reduced pacing with `LOOP_SLEEP_SECONDS=1`
+  - Each loop now spawns parallel authenticated product create/read + orders read requests.
+
+### Result
+- Higher sustained request volume for larger Grafana/Prometheus/Kafka graphs.
