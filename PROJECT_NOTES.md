@@ -486,3 +486,23 @@ Operational Note:
 - Service had fallback seeding via `app.auth.users` property.
 - Explicit empty disables startup seed insert attempts and avoids duplicate user crash.
 - Auth flow remains DB-backed through signup/login data.
+## 2026-02-20 21:45 - Service repos fix for Prometheus 404 on /actuator/prometheus
+
+### Root cause
+- Prometheus targets for `product-service` and `order-service` were `DOWN` with `404 Not Found` on `/actuator/prometheus`.
+- Both service repos were missing/insufficient Prometheus actuator setup.
+
+### Changes applied in service repos (dev branch)
+- `leninkart-product-service` commit: `6f1daf4`
+  - Added `spring-boot-starter-actuator`
+  - Added `micrometer-registry-prometheus`
+  - Set `app.auth.users` default to empty (`${APP_AUTH_USERS:}`) to avoid duplicate seeding on startup
+  - Added prometheus management properties with env overrides
+- `leninkart-order-service` commit: `a077b3c`
+  - Added `micrometer-registry-prometheus`
+  - Updated management exposure to include `prometheus` via env override
+  - Added prometheus enable/export properties with env overrides
+
+### Notes
+- Local `mvn` validation could not be run from this machine because `mvn` is not installed in PATH.
+- Next expected flow: GitHub Actions build/push images and infra tag update pipeline.
