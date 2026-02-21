@@ -6,5 +6,5 @@ data:
   PROMETHEUS_URL: "http://prometheus:9090"
   LOKI_URL: "http://loki-gateway:80"
   JAEGER_URL: "http://jaeger-query:16686"
-  OLLAMA_URL: "http://host.minikube.internal:11434"
+  OLLAMA_URL: "http://192.168.56.1:11434"
   DEFAULT_NAMESPACE: "dev"
