@@ -220,12 +220,12 @@ data:
       "panels": [
         {
           "id": 1,
-          "title": "Producer Send Rate (records/s)",
+          "title": "Consumer Throughput (records/s)",
           "type": "timeseries",
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
           "targets": [
             {
-              "expr": "sum(rate(kafka_producer_record_send_total[5m])) by (client_id)",
+              "expr": "sum(rate(kafka_consumer_fetch_manager_records_consumed_total[5m])) by (client_id)",
               "legendFormat": "{{client_id}}",
               "refId": "A"
             }
@@ -234,12 +234,12 @@ data:
         },
         {
           "id": 2,
-          "title": "Consumer Throughput (records/s)",
+          "title": "Consumer Bytes/s",
           "type": "timeseries",
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
           "targets": [
             {
-              "expr": "sum(rate(kafka_consumer_records_consumed_total[5m])) by (client_id)",
+              "expr": "sum(rate(kafka_consumer_fetch_manager_bytes_consumed_total[5m])) by (client_id)",
               "legendFormat": "{{client_id}}",
               "refId": "A"
             }
@@ -262,12 +262,12 @@ data:
         },
         {
           "id": 4,
-          "title": "Kafka Cluster Up",
+          "title": "Kafka Clients Seen",
           "type": "timeseries",
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
           "targets": [
             {
-              "expr": "sum(up{job=~\".*kafka.*\"})",
+              "expr": "count(kafka_app_info_start_time_ms)",
               "refId": "A"
             }
           ],

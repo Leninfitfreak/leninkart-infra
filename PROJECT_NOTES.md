@@ -613,3 +613,15 @@ Operational Note:
   - `LeninKart Kafka Overview` (`uid: leninkart-kafka-overview`)
   - `LeninKart AI Observer` (`uid: leninkart-ai-observer`)
 - Included Loki-backed panels for AI observer alert/recommendation visibility.
+
+## 2026-02-21 10:20 - Kafka dashboard query hardening
+
+### Issue
+- Kafka overview panels showed `No data` in dev because some producer/cluster-up queries were not available in current Prometheus scrape set.
+
+### Fix
+- Updated `observability/grafana/grafana-dashboards.yaml` (`LeninKart Kafka Overview`) to use guaranteed available consumer metrics:
+  - `sum(rate(kafka_consumer_fetch_manager_records_consumed_total[5m])) by (client_id)`
+  - `sum(rate(kafka_consumer_fetch_manager_bytes_consumed_total[5m])) by (client_id)`
+  - `max(kafka_consumer_fetch_manager_records_lag_max) by (client_id)`
+  - `count(kafka_app_info_start_time_ms)` as Kafka client visibility panel.
