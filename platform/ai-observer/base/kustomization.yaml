@@ -3,5 +3,6 @@ kind: Kustomization
 resources:
   - serviceaccount.yaml
   - configmap-env.yaml
+  - externalsecret-openai.yaml
   - deployment.yaml
   - service.yaml
