@@ -439,3 +439,19 @@ Operational Note:
 - `503 UH` was caused by periods where order-service had no healthy endpoint.
 - OOM restart cycles made service temporarily unavailable behind Istio.
 - Higher memory + JVM cap reduces OOM and keeps endpoint healthy.
+## 2026-02-20 17:22 - Auth alignment for product/order API access
+
+### Issue observed
+- Frontend showed `Products service is unavailable or you are not authorized`.
+- Istio logs showed `/api/products` responses as `401` from product-service.
+
+### Declarative fix applied (infra)
+- Updated auth user mapping to keep token/user behavior aligned across services:
+  - `applications/product-service/helm/values-dev.yaml`
+  - `applications/order-service/helm/values-dev.yaml`
+- Added same user set in `APP_AUTH_USERS`, including:
+  - `leninfitfreak@gmail.com` with `USER` role
+
+### Expected result
+- Product and order APIs accept the same JWT/user context after rollout.
+- Frontend no longer shows auth error for `/api/products` for that user.
