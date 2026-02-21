@@ -518,3 +518,23 @@ Operational Note:
 ### How to control load (GitOps)
 - Increase traffic: raise `spec.replicas` in `platform/loadtest/traffic-generator.yaml`.
 - Stop traffic: set `spec.replicas: 0`.
+## 2026-02-20 22:12 - Added Loki + Promtail (Argo-managed log pipeline)
+
+### Added
+- `argocd/applications/dev/loki.yaml`
+  - Deploys Loki via Grafana Helm chart in `dev` namespace.
+  - Single-binary mode for local/minikube setup.
+- `argocd/applications/dev/promtail.yaml`
+  - Deploys Promtail via Grafana Helm chart in `dev` namespace.
+  - Promtail pushes pod logs to `http://loki.dev.svc.cluster.local:3100/loki/api/v1/push`.
+
+### Updated
+- `observability/grafana/grafana-datasources.yaml`
+- `observability/grafana/grafana.yaml`
+  - Added Loki datasource so logs can be queried from Grafana Explore.
+
+### Usage after sync
+- Grafana -> Explore -> select datasource `Loki`
+- Query example:
+  - `{namespace="dev"}`
+  - `{namespace="dev", app="product-service"} |= "ERROR"`

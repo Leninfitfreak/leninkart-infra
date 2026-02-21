@@ -14,3 +14,6 @@ data:
       - name: Jaeger
         type: jaeger
         url: http://jaeger-query.dev.svc.cluster.local:16686
+      - name: Loki
+        type: loki
+        url: http://loki.dev.svc.cluster.local:3100
