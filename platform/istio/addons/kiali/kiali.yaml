@@ -92,8 +92,16 @@ data:
     external_services:
       custom_dashboards:
         enabled: true
+      grafana:
+        enabled: true
+        in_cluster_url: http://grafana.dev.svc.cluster.local:3000
       istio:
         root_namespace: istio-system
+      prometheus:
+        url: http://prometheus.dev.svc.cluster.local:9090
+      tracing:
+        in_cluster_url: http://jaeger-query.dev.svc.cluster.local:16686/jaeger
+        provider: jaeger
     identity:
       cert_file: ""
       private_key_file: ""
