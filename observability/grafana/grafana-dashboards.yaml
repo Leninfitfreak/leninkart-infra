@@ -282,7 +282,7 @@ data:
       "title": "LeninKart AI Observer",
       "tags": ["leninkart", "ai-observer", "loki"],
       "schemaVersion": 39,
-      "version": 1,
+      "version": 2,
       "refresh": "10s",
       "time": {"from": "now-1h", "to": "now"},
       "panels": [
@@ -321,6 +321,19 @@ data:
           "targets": [
             {
               "expr": "{namespace=\"dev\", app=\"ai-observer\"} |= \"[AI-OBSERVER][recommendation]\"",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Component Summary (Live API)",
+          "type": "logs",
+          "datasource": "Loki",
+          "gridPos": {"h": 9, "w": 24, "x": 0, "y": 18},
+          "targets": [
+            {
+              "expr": "{namespace=\"dev\", app=\"ai-observer\"} |= \"ai_observer_summary\"",
               "refId": "A"
             }
           ]
