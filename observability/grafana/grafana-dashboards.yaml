@@ -282,7 +282,7 @@ data:
       "title": "LeninKart AI Observer",
       "tags": ["leninkart", "ai-observer", "loki"],
       "schemaVersion": 39,
-      "version": 2,
+      "version": 3,
       "refresh": "10s",
       "time": {"from": "now-1h", "to": "now"},
       "panels": [
@@ -334,6 +334,45 @@ data:
           "targets": [
             {
               "expr": "{namespace=\"dev\", app=\"ai-observer\"} |= \"ai_observer_summary\"",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "Healthy Services (5m)",
+          "type": "stat",
+          "datasource": "Loki",
+          "gridPos": {"h": 6, "w": 8, "x": 0, "y": 27},
+          "targets": [
+            {
+              "expr": "sum(count_over_time({namespace=\"dev\", app=\"ai-observer\"} |= \"ai_observer_summary\" |= \"\\\"overall_status\\\":\\\"healthy\\\"\" [5m]))",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "title": "Warning Services (5m)",
+          "type": "stat",
+          "datasource": "Loki",
+          "gridPos": {"h": 6, "w": 8, "x": 8, "y": 27},
+          "targets": [
+            {
+              "expr": "sum(count_over_time({namespace=\"dev\", app=\"ai-observer\"} |= \"ai_observer_summary\" |= \"\\\"overall_status\\\":\\\"warning\\\"\" [5m]))",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "title": "Critical Services (5m)",
+          "type": "stat",
+          "datasource": "Loki",
+          "gridPos": {"h": 6, "w": 8, "x": 16, "y": 27},
+          "targets": [
+            {
+              "expr": "sum(count_over_time({namespace=\"dev\", app=\"ai-observer\"} |= \"ai_observer_summary\" |= \"\\\"overall_status\\\":\\\"critical\\\"\" [5m]))",
               "refId": "A"
             }
           ]
