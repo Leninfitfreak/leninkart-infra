@@ -27,6 +27,7 @@ platform/ai-observer/
 - `LLM_PROVIDER` (default `ollama`)
 - `LLM_MODEL` (default `gpt-oss:20b`)
 - `OLLAMA_URL` (default `https://ollama.com`)
+- `ALL_SERVICES` (default `product-service,order-service`) used when `service=all`
 - `OPENAI_API_KEY` via `ai-observer-secrets` secret (used for cloud auth)
 - `OPENAI_BASE_URL` kept for optional OpenAI-compatible provider mode
 - `DEFAULT_NAMESPACE` (default `dev`)
