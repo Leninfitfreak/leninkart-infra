@@ -25,7 +25,7 @@ platform/ai-observer/
 - `LOKI_URL` (default `http://loki-gateway:80`)
 - `JAEGER_URL` (default `http://jaeger-query:16686`)
 - `LLM_PROVIDER` (default `ollama`)
-- `LLM_MODEL` (default `llama3:8b`)
+- `LLM_MODEL` (default `gpt-oss:20b`)
 - `OLLAMA_URL` (default `https://ollama.com`)
 - `OPENAI_API_KEY` via `ai-observer-secrets` secret (used for cloud auth)
 - `OPENAI_BASE_URL` kept for optional OpenAI-compatible provider mode
