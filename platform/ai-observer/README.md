@@ -26,7 +26,7 @@ platform/ai-observer/
 - `JAEGER_URL` (default `http://jaeger-query:16686`)
 - `LLM_PROVIDER` (default `ollama`)
 - `LLM_MODEL` (default `llama3:8b`)
-- `OLLAMA_URL` (default `https://ollama.com/api`)
+- `OLLAMA_URL` (default `https://ollama.com`)
 - `OPENAI_API_KEY` via `ai-observer-secrets` secret (used for cloud auth)
 - `OPENAI_BASE_URL` kept for optional OpenAI-compatible provider mode
 - `DEFAULT_NAMESPACE` (default `dev`)
