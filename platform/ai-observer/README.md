@@ -24,11 +24,11 @@ platform/ai-observer/
 - `PROMETHEUS_URL` (default `http://prometheus:9090`)
 - `LOKI_URL` (default `http://loki-gateway:80`)
 - `JAEGER_URL` (default `http://jaeger-query:16686`)
-- `LLM_PROVIDER` (default `openai`)
-- `LLM_MODEL` (default `gpt-4o-mini`)
-- `OPENAI_BASE_URL` (default `https://api.openai.com/v1`)
-- `OPENAI_API_KEY` via `ai-observer-secrets` secret
-- `OLLAMA_URL` is kept for optional local fallback mode
+- `LLM_PROVIDER` (default `ollama`)
+- `LLM_MODEL` (default `llama3:8b`)
+- `OLLAMA_URL` (default `https://ollama.com/api`)
+- `OPENAI_API_KEY` via `ai-observer-secrets` secret (used for cloud auth)
+- `OPENAI_BASE_URL` kept for optional OpenAI-compatible provider mode
 - `DEFAULT_NAMESPACE` (default `dev`)
 
 Secret setup guide:
