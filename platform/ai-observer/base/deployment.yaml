@@ -14,7 +14,7 @@ spec:
       labels:
         app: ai-observer
       annotations:
-        ai-observer/config-version: "v4-fastapi-webhook-agent"
+        ai-observer/config-version: "v5-incident-analysis-dburl"
         sidecar.istio.io/inject: "false"
     spec:
       serviceAccountName: ai-observer

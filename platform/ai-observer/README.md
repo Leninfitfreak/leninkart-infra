@@ -28,9 +28,15 @@ platform/ai-observer/
 - `LLM_MODEL` (default `gpt-oss:20b`)
 - `OLLAMA_URL` (default `https://ollama.com`)
 - `ALL_SERVICES` (default `product-service,order-service`) used when `service=all`
-- `OPENAI_API_KEY` via `ai-observer-secrets` secret (used for cloud auth)
+- `OLLAMA_API_KEY` via `ai-observer-secrets` secret (used for cloud auth)
+- `DATABASE_URL` via `ai-observer-secrets` secret (PostgreSQL incident snapshot persistence)
 - `OPENAI_BASE_URL` kept for optional OpenAI-compatible provider mode
 - `DEFAULT_NAMESPACE` (default `dev`)
+
+Vault key path for `ai-observer-secrets`:
+- `leninkart/ai-observer/config`
+  - `OLLAMA_API_KEY`
+  - `DATABASE_URL` (example: `postgresql+psycopg://leninkart:leninkart123@postgres:5432/leninkart`)
 
 Secret setup guide:
 - `platform/ai-observer/base/secrets-template.md`
