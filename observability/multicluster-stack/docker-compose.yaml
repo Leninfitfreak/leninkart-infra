@@ -1,0 +1,92 @@
+services:
+  mimir:
+    image: grafana/mimir:2.13.0
+    command: ["-config.file=/etc/mimir/mimir.yaml"]
+    volumes:
+      - ./mimir/mimir.yaml:/etc/mimir/mimir.yaml:ro
+    ports:
+      - "9009:9009"
+
+  loki:
+    image: grafana/loki:3.1.1
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+    ports:
+      - "3100:3100"
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+      - "4318:4318"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.105.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      - mimir
+      - loki
+      - tempo
+    ports:
+      - "14317:4317"
+      - "14318:4318"
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - mimir
+    ports:
+      - "9090:9090"
+
+  central-collector:
+    build:
+      context: ../../platform/ai-observer/multicluster/central-collector
+    environment:
+      AGENT_SHARED_TOKEN: dev-agent-token
+      OTEL_COLLECTOR_BASE_URL: http://otel-collector:4318
+      LOKI_PUSH_URL: http://loki:3100/loki/api/v1/push
+      TEMPO_OTLP_HTTP_ENDPOINT: http://tempo:4318/v1/traces
+    depends_on:
+      - loki
+      - tempo
+      - otel-collector
+    ports:
+      - "8081:8081"
+
+  observer-agent:
+    build:
+      context: ../../platform/ai-observer/multicluster/observer-agent
+    environment:
+      CLUSTER_ID: minikube-dev
+      CENTRAL_PUSH_URL: http://central-collector:8081/api/agent/push
+      AGENT_TOKEN: dev-agent-token
+      LOCAL_PROMETHEUS_URL: http://prometheus:9090
+      LOCAL_OTEL_METRICS_URL: http://otel-collector:8888/metrics
+      POLL_INTERVAL_SECONDS: 30
+    depends_on:
+      - central-collector
+      - prometheus
+      - otel-collector
+
+  grafana:
+    image: grafana/grafana:11.2.2
+    volumes:
+      - ./grafana/provisioning/datasources/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./grafana/provisioning/dashboards/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./grafana/provisioning/dashboards/multicluster-overview.json:/var/lib/grafana/dashboards/multicluster-overview.json:ro
+    depends_on:
+      - mimir
+      - loki
+      - tempo
+    ports:
+      - "3000:3000"

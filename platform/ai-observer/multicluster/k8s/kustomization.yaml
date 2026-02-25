@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: dev
+resources:
+  - 01-observer-agent-configmap.yaml
+  - 02-observer-agent-secret-template.yaml
+  - 03-observer-agent-deployment.yaml
+  - 04-central-collector-configmap.yaml
+  - 05-central-collector-secret-template.yaml
+  - 06-central-collector-deployment.yaml
+  - 07-central-collector-service.yaml
+  - 08-central-otel-configmap.yaml
+  - 09-central-otel-deployment.yaml
+  - 10-central-otel-service.yaml
+  - 11-prometheus-remote-write-configmap.yaml

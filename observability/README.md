@@ -7,6 +7,7 @@ Monitoring, metrics, and distributed tracing.
 - **grafana**: Metrics visualization and dashboards
 - **jaeger**: Distributed tracing
 - **otel**: OpenTelemetry collector for trace/metric collection
+- **multicluster-stack**: Additive Docker Compose stack for Mimir/Loki/Tempo + central collector integration
 
 ## Architecture
 ```

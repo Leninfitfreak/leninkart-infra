@@ -17,7 +17,17 @@ platform/ai-observer/
     kustomization.yaml
   overlays/dev/kustomization.yaml
   alertmanager-webhook-snippet.yaml
+  multicluster/
+    observer-agent/
+    central-collector/
+    k8s/
+    scripts/
 ```
+
+## Additive Multi-Cluster Extension
+
+- Path: `platform/ai-observer/multicluster`
+- Adds `observer-agent` and central ingestion endpoint `/api/agent/push` without removing current endpoints.
 
 ## Environment Variables
 
