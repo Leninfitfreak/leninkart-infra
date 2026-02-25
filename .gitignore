@@ -7,3 +7,5 @@ _cleanup_backup/
 _ingress_backup/
 *_ingress*.yaml
 *.bak*
+__pycache__/
+*.pyc
