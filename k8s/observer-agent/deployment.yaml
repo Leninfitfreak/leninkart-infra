@@ -12,10 +12,14 @@ spec:
       labels:
         app: observer-agent
     spec:
+      hostAliases:
+        - ip: "192.168.49.1"
+          hostnames:
+            - "observer-core.local"
       containers:
         - name: observer-agent
-          image: docker.io/leninfitfreak/observer-agent:sha-d296811
-          imagePullPolicy: Always
+          image: observer-agent:latest
+          imagePullPolicy: Never
           envFrom:
             - configMapRef:
                 name: observer-agent-config
