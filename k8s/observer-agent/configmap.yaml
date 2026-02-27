@@ -4,7 +4,7 @@ metadata:
   name: observer-agent-config
 data:
   CLUSTER_ID: "minikube-dev"
-  CENTRAL_URL: "http://ai-observer:8080/api/agent/push"
+  CENTRAL_URL: "http://host.minikube.internal:8080/api/agent/push"
   PROM_URL: "http://prometheus:9090"
   PUSH_INTERVAL: "30"
   ENVIRONMENT: "dev"
