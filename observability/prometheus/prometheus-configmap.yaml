@@ -42,6 +42,14 @@ data:
             regex: true
   ai-observer-rules.yml: |
     groups:
+      - name: ai-observer-agent-compat
+        rules:
+          - record: process_cpu_seconds_total
+            expr: process_cpu_time_ns_total / 1e9
+          - record: process_resident_memory_bytes
+            expr: sum by (job, instance, app, namespace) (jvm_memory_used_bytes)
+          - record: http_requests_total
+            expr: http_server_requests_seconds_count
       - name: ai-observer-recording
         rules:
           - record: aiobserver:thread_pool_saturation_5m
