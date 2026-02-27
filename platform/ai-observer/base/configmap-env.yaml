@@ -12,5 +12,6 @@ data:
   LLM_ATTEMPTS: "1"
   OPENAI_BASE_URL: "https://api.openai.com/v1"
   OLLAMA_URL: "https://ollama.com"
+  AGENT_TOKEN: "replace-me-dev-token"
   ALL_SERVICES: "product-service,order-service"
   DEFAULT_NAMESPACE: "dev"

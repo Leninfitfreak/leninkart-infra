@@ -3,8 +3,8 @@ kind: ConfigMap
 metadata:
   name: observer-agent-config
 data:
-  CLUSTER_ID: ""
-  CENTRAL_URL: ""
-  PROM_URL: ""
-  PUSH_INTERVAL: ""
-  ENVIRONMENT: ""
+  CLUSTER_ID: "minikube-dev"
+  CENTRAL_URL: "http://ai-observer:8080/api/agent/push"
+  PROM_URL: "http://prometheus:9090"
+  PUSH_INTERVAL: "30"
+  ENVIRONMENT: "dev"
