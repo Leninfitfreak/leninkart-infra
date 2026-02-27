@@ -1,14 +1,14 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: ai-observer-dev
+  name: observer-agent-dev
   namespace: argocd
 spec:
   project: leninkart
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: dev
-    path: platform/ai-observer/overlays/dev
+    path: k8s/observer-agent
   destination:
     server: https://kubernetes.default.svc
     namespace: dev
@@ -18,4 +18,3 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-
