@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: observer-agent
-          image: observer-agent:patched-20260227b
+          image: observer-agent:realmetrics-20260228
           imagePullPolicy: Never
           envFrom:
             - configMapRef:
