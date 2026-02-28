@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: observer-agent
-          image: docker.io/leninfitfreak/observer-agent:sha-a681d4c
+          image: docker.io/leninfitfreak/observer-agent:sha-1e2cdcc
           imagePullPolicy: Never
           envFrom:
             - configMapRef:
