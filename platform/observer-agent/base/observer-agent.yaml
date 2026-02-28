@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: observer-agent
+  labels:
+    app: observer-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: observer-agent
+  template:
+    metadata:
+      labels:
+        app: observer-agent
+    spec:
+      containers:
+        - name: observer-agent
+          image: observer-agent:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CLUSTER_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: observer-agent-config
+                  key: CLUSTER_ID
+            - name: CENTRAL_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: observer-agent-config
+                  key: CENTRAL_URL
+            - name: PROM_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: observer-agent-config
+                  key: PROM_URL
+            - name: PUSH_INTERVAL
+              valueFrom:
+                configMapKeyRef:
+                  name: observer-agent-config
+                  key: PUSH_INTERVAL
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: observer-agent-config
+                  key: ENVIRONMENT
+            - name: AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: observer-agent-secrets
+                  key: AGENT_TOKEN
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
