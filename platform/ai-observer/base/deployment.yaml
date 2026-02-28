@@ -24,7 +24,7 @@ spec:
             - "host.minikube.internal"
       containers:
         - name: ai-observer
-          image: docker.io/leninfitfreak/ai-observer-agent:sha-1e2cdcc
+          image: docker.io/leninfitfreak/ai-observer-agent:sha-cdd7d2d
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
