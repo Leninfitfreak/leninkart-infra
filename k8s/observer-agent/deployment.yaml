@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: observer-agent
-          image: observer-agent:patched-20260227
+          image: observer-agent:patched-20260227b
           imagePullPolicy: Never
           envFrom:
             - configMapRef:
