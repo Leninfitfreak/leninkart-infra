@@ -16,7 +16,7 @@ spec:
       serviceAccountName: observer-agent
       containers:
         - name: observer-agent
-          image: observer-agent:latest
+          image: observer-agent:v2k8s
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
