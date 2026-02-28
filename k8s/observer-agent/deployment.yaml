@@ -16,7 +16,7 @@ spec:
       serviceAccountName: observer-agent
       containers:
         - name: observer-agent
-          image: observer-agent:v2k8s
+          image: docker.io/leninfitfreak/observer-agent:sha-ca9be4c
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
