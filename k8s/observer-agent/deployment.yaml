@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: observer-agent
+  namespace: dev
 spec:
   replicas: 1
   selector:
@@ -15,7 +16,7 @@ spec:
       serviceAccountName: observer-agent
       containers:
         - name: observer-agent
-          image: observer-agent:topology-20260228
+          image: observer-agent:topology-20260228c
           imagePullPolicy: Never
           envFrom:
             - configMapRef:
