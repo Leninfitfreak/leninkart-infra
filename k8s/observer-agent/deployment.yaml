@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: observer-agent
-          image: observer-agent:realmetrics-20260228b
+          image: docker.io/leninfitfreak/observer-agent:sha-a681d4c
           imagePullPolicy: Never
           envFrom:
             - configMapRef:
