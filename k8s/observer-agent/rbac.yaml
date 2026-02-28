@@ -10,7 +10,7 @@ metadata:
   name: observer-agent-topology-reader
 rules:
   - apiGroups: [""]
-    resources: ["pods", "services", "endpoints", "namespaces"]
+    resources: ["pods", "services", "endpoints", "namespaces", "nodes"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
