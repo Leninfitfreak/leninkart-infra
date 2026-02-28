@@ -10,7 +10,6 @@ spec:
   sourceRepos:
     - 'https://github.com/Leninfitfreak/leninkart-infra.git'
     - 'https://charts.external-secrets.io'  # External Secrets Operator Helm chart
-    - 'https://istio-release.storage.googleapis.com/charts'  # Istio (if needed)
     - '*'  # Allow all repos (remove in production)
   
   # Destination clusters and namespaces
@@ -24,8 +23,6 @@ spec:
     - namespace: vault
       server: https://kubernetes.default.svc
     - namespace: external-secrets-system
-      server: https://kubernetes.default.svc
-    - namespace: istio-system
       server: https://kubernetes.default.svc
     - namespace: '*'  # Allow all namespaces (restrict in production)
       server: https://kubernetes.default.svc

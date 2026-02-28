@@ -3,5 +3,4 @@ kind: Namespace
 metadata:
   name: dev
   labels:
-    istio-injection: enabled
     pod-security.kubernetes.io/enforce: baseline

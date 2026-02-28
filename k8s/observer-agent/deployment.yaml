@@ -12,6 +12,7 @@ spec:
       labels:
         app: observer-agent
     spec:
+      serviceAccountName: observer-agent
       containers:
         - name: observer-agent
           image: docker.io/leninfitfreak/observer-agent:sha-088e1ab
