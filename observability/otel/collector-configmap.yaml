@@ -65,7 +65,7 @@ data:
         log_statements:
           - context: log
             statements:
-              - set(cache["body_map"], ParseJSON(String(body))) where cache["body_map"] == nil
+              - set(cache["body_map"], ParseJSON(body)) where IsString(body)
               - set(attributes["service.name"], resource.attributes["service.name"])
               - set(attributes["k8s.namespace.name"], resource.attributes["k8s.namespace.name"])
               - set(attributes["k8s.deployment.name"], resource.attributes["k8s.deployment.name"])
