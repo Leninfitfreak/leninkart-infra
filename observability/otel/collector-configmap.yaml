@@ -44,7 +44,6 @@ data:
             - k8s.pod.name
             - k8s.deployment.name
             - k8s.node.name
-            - k8s.cluster.name
       resource:
         attributes:
           - key: k8s.cluster.name
