@@ -19,20 +19,18 @@ data:
       memory_limiter:
         limit_mib: 512
     exporters:
-      otlp/jaeger:
-        endpoint: jaeger-collector:4317
+      otlp/signoz:
+        endpoint: host.docker.internal:4317
         tls:
           insecure: true
-      prometheus:
-        endpoint: 0.0.0.0:8889
       logging: {}
     service:
       pipelines:
         traces:
           receivers: [otlp, zipkin]
           processors: [batch]
-          exporters: [otlp/jaeger, logging]
+          exporters: [otlp/signoz, logging]
         metrics:
           receivers: [otlp]
           processors: [batch]
-          exporters: [prometheus]
+          exporters: [otlp/signoz, logging]

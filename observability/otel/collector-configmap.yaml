@@ -37,13 +37,10 @@ data:
             action: upsert
 
     exporters:
-      otlp/jaeger:
-        endpoint: jaeger-collector.dev.svc.cluster.local:4317
+      otlp/signoz:
+        endpoint: host.docker.internal:4317
         tls:
           insecure: true
-      prometheus:
-        endpoint: "0.0.0.0:8889"
-        namespace: leninkart
       logging:
         loglevel: info
 
@@ -57,8 +54,8 @@ data:
         traces:
           receivers: [otlp, zipkin]
           processors: [memory_limiter, resource, batch]
-          exporters: [otlp/jaeger, logging]
+          exporters: [otlp/signoz, logging]
         metrics:
           receivers: [otlp]
           processors: [memory_limiter, resource, batch]
-          exporters: [prometheus, logging]
+          exporters: [otlp/signoz, logging]
