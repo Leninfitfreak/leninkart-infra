@@ -73,16 +73,9 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /conf
-            - name: varlogpods
-              mountPath: /var/log/pods
-              readOnly: true
       tolerations:
         - operator: Exists
       volumes:
         - name: config
           configMap:
             name: otel-collector-config
-        - name: varlogpods
-          hostPath:
-            path: /var/log/pods
-            type: DirectoryOrCreate

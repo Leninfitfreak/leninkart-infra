@@ -25,12 +25,6 @@ data:
         auth_type: serviceAccount
         endpoint: https://${env:K8S_NODE_NAME}:10250
         insecure_skip_verify: true
-      filelog:
-        include:
-          - /var/log/pods/*/*/*.log
-        start_at: beginning
-        include_file_path: true
-        include_file_name: false
 
     processors:
       batch:
@@ -65,7 +59,7 @@ data:
           processors: [memory_limiter, resource, batch]
           exporters: [otlp]
         logs:
-          receivers: [filelog, otlp]
+          receivers: [otlp]
           processors: [memory_limiter, resource, batch]
           exporters: [otlp]
 ---
