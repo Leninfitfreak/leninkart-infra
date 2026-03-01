@@ -11,51 +11,72 @@ data:
       otlp:
         protocols:
           grpc:
-            endpoint: 0.0.0.0:4317
           http:
-            endpoint: 0.0.0.0:4318
-            cors:
-              allowed_origins:
-                - "*"
-      zipkin:
-        endpoint: 0.0.0.0:9411
+      hostmetrics:
+        collection_interval: 10s
+        scrapers:
+          cpu:
+          memory:
+          disk:
+          filesystem:
+          network:
+      kubeletstats:
+        collection_interval: 10s
+        auth_type: serviceAccount
+        endpoint: https://${env:K8S_NODE_NAME}:10250
+        insecure_skip_verify: true
+      filelog:
+        include:
+          - /var/log/pods/*/*/*.log
+        start_at: beginning
+        include_file_path: true
+        include_file_name: false
 
     processors:
       batch:
-        timeout: 10s
-        send_batch_size: 1024
       memory_limiter:
         check_interval: 1s
         limit_mib: 512
       resource:
         attributes:
-          - key: service.namespace
-            value: leninkart
+          - key: k8s.cluster.name
+            value: ${env:CLUSTER_NAME}
             action: upsert
           - key: deployment.environment
-            value: dev
+            value: ${env:ENVIRONMENT}
             action: upsert
 
     exporters:
-      otlp/signoz:
-        endpoint: 192.168.49.10:4317
+      otlp:
+        endpoint: ${env:OTEL_EXPORTER_ENDPOINT}
         tls:
           insecure: true
       logging:
-        loglevel: info
-
-    extensions:
-      health_check:
-        endpoint: :13133
+        verbosity: detailed
 
     service:
-      extensions: [health_check]
       pipelines:
-        traces:
-          receivers: [otlp, zipkin]
-          processors: [memory_limiter, resource, batch]
-          exporters: [otlp/signoz, logging]
         metrics:
+          receivers: [hostmetrics, kubeletstats, otlp]
+          processors: [memory_limiter, resource, batch]
+          exporters: [otlp]
+        traces:
           receivers: [otlp]
           processors: [memory_limiter, resource, batch]
-          exporters: [otlp/signoz, logging]
+          exporters: [otlp]
+        logs:
+          receivers: [filelog, otlp]
+          processors: [memory_limiter, resource, batch]
+          exporters: [otlp]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-env
+  namespace: dev
+  labels:
+    app: otel-collector
+data:
+  CLUSTER_NAME: minikube
+  ENVIRONMENT: dev
+  OTEL_EXPORTER_ENDPOINT: "192.168.49.10:4317"
