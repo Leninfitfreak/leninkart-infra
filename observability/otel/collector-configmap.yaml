@@ -25,6 +25,15 @@ data:
         auth_type: serviceAccount
         endpoint: https://${env:K8S_NODE_NAME}:10250
         insecure_skip_verify: true
+      kafkametrics:
+        brokers:
+          - kafka-0.kafka.dev.svc.cluster.local:9092
+          - kafka-1.kafka.dev.svc.cluster.local:9092
+        protocol_version: 3.7.0
+        scrapers:
+          - brokers
+          - topics
+          - consumers
       k8sobjects:
         objects:
           - name: events
@@ -100,12 +109,12 @@ data:
     service:
       pipelines:
         metrics:
-          receivers: [hostmetrics, kubeletstats, otlp]
+          receivers: [hostmetrics, kubeletstats, kafkametrics, otlp]
           processors: [memory_limiter, resource, batch]
           exporters: [otlp]
         traces:
           receivers: [otlp]
-          processors: [memory_limiter, resource, batch]
+          processors: [memory_limiter, k8sattributes, resource, batch]
           exporters: [otlp]
         logs:
           receivers: [k8sobjects, otlp]
