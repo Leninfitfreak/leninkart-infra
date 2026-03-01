@@ -20,7 +20,7 @@ data:
         limit_mib: 512
     exporters:
       otlp/signoz:
-        endpoint: host.docker.internal:4317
+        endpoint: 192.168.49.10:4317
         tls:
           insecure: true
       logging: {}
