@@ -81,7 +81,7 @@ data:
               - set(attributes["k8s.cluster.name"], resource.attributes["k8s.cluster.name"])
               - set(attributes["host.name"], resource.attributes["host.name"])
               - set(attributes["k8s.namespace.name"], cache["body_map"]["object"]["involvedObject"]["namespace"]) where attributes["k8s.namespace.name"] == nil and cache["body_map"] != nil
-              - set(attributes["k8s.pod.name"], cache["body_map"]["object"]["involvedObject"]["name"]) where attributes["k8s.pod.name"] == nil and cache["body_map"] != nil and cache["body_map"]["object"]["involvedObject"]["kind"] == "Pod"
+              - set(attributes["k8s.pod.name"], cache["body_map"]["object"]["involvedObject"]["name"]) where attributes["k8s.pod.name"] == nil and cache["body_map"] != nil
               - set(attributes["k8s.deployment.name"], cache["body_map"]["object"]["involvedObject"]["name"]) where attributes["k8s.deployment.name"] == nil and cache["body_map"] != nil and cache["body_map"]["object"]["involvedObject"]["kind"] == "Deployment"
               - set(attributes["service.name"], cache["body_map"]["object"]["involvedObject"]["name"]) where attributes["service.name"] == nil and cache["body_map"] != nil
               - set(attributes["service.name"], "k8s-events") where attributes["service.name"] == nil
@@ -106,7 +106,7 @@ data:
           exporters: [otlp]
         logs:
           receivers: [k8sobjects, otlp]
-          processors: [k8sattributes, memory_limiter, resource, transform/logs, batch]
+          processors: [k8sattributes, resource, transform/logs, batch]
           exporters: [otlp]
 ---
 apiVersion: v1
