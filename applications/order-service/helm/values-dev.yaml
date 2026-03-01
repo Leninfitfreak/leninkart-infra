@@ -53,7 +53,7 @@ env:
   APP_JWT_TTL_SECONDS: "86400"
   APP_AUTH_USERS: ""
   OTEL_SERVICE_NAME: "order-service"
-  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.dev.svc.cluster.local:4318"
   OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
   OTEL_TRACES_EXPORTER: "otlp"
   OTEL_METRICS_EXPORTER: "otlp"
