@@ -72,6 +72,10 @@ data:
               - set(attributes["k8s.pod.name"], resource.attributes["k8s.pod.name"])
               - set(attributes["k8s.cluster.name"], resource.attributes["k8s.cluster.name"])
               - set(attributes["host.name"], resource.attributes["host.name"])
+              - set(attributes["k8s.namespace.name"], body["object"]["involvedObject"]["namespace"]) where attributes["k8s.namespace.name"] == nil and IsMap(body)
+              - set(attributes["k8s.pod.name"], body["object"]["involvedObject"]["name"]) where attributes["k8s.pod.name"] == nil and IsMap(body)
+              - set(attributes["k8s.deployment.name"], body["object"]["involvedObject"]["name"]) where attributes["k8s.deployment.name"] == nil and IsMap(body) and body["object"]["involvedObject"]["kind"] == "Deployment"
+              - set(attributes["service.name"], body["object"]["involvedObject"]["name"]) where attributes["service.name"] == nil and IsMap(body)
               - set(attributes["k8s.namespace.name"], cache["body_map"]["object"]["involvedObject"]["namespace"]) where attributes["k8s.namespace.name"] == nil and cache["body_map"] != nil
               - set(attributes["k8s.pod.name"], cache["body_map"]["object"]["involvedObject"]["name"]) where attributes["k8s.pod.name"] == nil and cache["body_map"] != nil
               - set(attributes["k8s.deployment.name"], cache["body_map"]["object"]["involvedObject"]["name"]) where attributes["k8s.deployment.name"] == nil and cache["body_map"] != nil and cache["body_map"]["object"]["involvedObject"]["kind"] == "Deployment"
