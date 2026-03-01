@@ -52,6 +52,9 @@ data:
           - key: deployment.environment
             value: ${env:ENVIRONMENT}
             action: upsert
+          - key: host.name
+            value: ${env:K8S_NODE_NAME}
+            action: upsert
           - key: service.name
             from_attribute: k8s.deployment.name
             action: upsert
@@ -68,6 +71,9 @@ data:
               - set(attributes["k8s.deployment.name"], resource.attributes["k8s.deployment.name"])
               - set(attributes["k8s.cluster.name"], resource.attributes["k8s.cluster.name"])
               - set(attributes["host.name"], resource.attributes["host.name"])
+              - set(attributes["k8s.namespace.name"], ParseJSON(body)["object"]["involvedObject"]["namespace"]) where attributes["k8s.namespace.name"] == nil
+              - set(attributes["k8s.deployment.name"], ParseJSON(body)["object"]["involvedObject"]["name"]) where attributes["k8s.deployment.name"] == nil
+              - set(attributes["service.name"], ParseJSON(body)["object"]["involvedObject"]["name"]) where attributes["service.name"] == nil
 
     exporters:
       otlp:
