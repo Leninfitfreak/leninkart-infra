@@ -37,19 +37,12 @@ data:
         limit_mib: 512
       k8sattributes:
         auth_type: serviceAccount
-        passthrough: false
+        passthrough: true
         extract:
           metadata:
             - k8s.namespace.name
             - k8s.pod.name
             - k8s.node.name
-        pod_association:
-          - sources:
-              - from: resource_attribute
-                name: k8s.pod.ip
-              - from: resource_attribute
-                name: k8s.pod.name
-              - from: connection
       resource:
         attributes:
           - key: k8s.cluster.name
