@@ -55,9 +55,12 @@ env:
   OTEL_SERVICE_NAME: "order-service"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.dev.svc.cluster.local:4318"
   OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  OTEL_PROPAGATORS: "tracecontext,baggage"
   OTEL_TRACES_EXPORTER: "otlp"
   OTEL_METRICS_EXPORTER: "otlp"
-  OTEL_LOGS_EXPORTER: "none"
+  OTEL_LOGS_EXPORTER: "otlp"
+  OTEL_INSTRUMENTATION_KAFKA_ENABLED: "true"
+  OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED: "true"
   MANAGEMENT_TRACING_ENABLED: "true"
   MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
 # ============================================

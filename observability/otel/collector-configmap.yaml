@@ -66,7 +66,7 @@ data:
             action: upsert
           - key: service.name
             from_attribute: k8s.deployment.name
-            action: upsert
+            action: insert
           - key: deployment.environment
             value: ${env:ENVIRONMENT}
             action: upsert
@@ -117,7 +117,7 @@ data:
       pipelines:
         metrics:
           receivers: [hostmetrics, kubeletstats, kafkametrics, otlp]
-          processors: [memory_limiter, resource, batch]
+          processors: [memory_limiter, k8sattributes, resource, batch]
           exporters: [otlp]
         traces:
           receivers: [otlp]
@@ -125,7 +125,7 @@ data:
           exporters: [otlp]
         logs:
           receivers: [k8sobjects, otlp]
-          processors: [k8sattributes, resource, transform/logs, batch]
+          processors: [memory_limiter, k8sattributes, resource, transform/logs, batch]
           exporters: [otlp]
 ---
 apiVersion: v1
