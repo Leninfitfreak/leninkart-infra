@@ -7,9 +7,10 @@ data:
   run.sh: |
     #!/bin/sh
     set -eu
-    FRONTEND_BASE="${FRONTEND_BASE:-http://leninkart-frontend.dev.svc.cluster.local}"
+    FRONTEND_BASE="${FRONTEND_BASE:-http://ingress-nginx-controller.ingress-nginx.svc.cluster.local}"
     USER_EMAIL="${USER_EMAIL:-leninfitfreak@gmail.com}"
     USER_PASSWORD="${USER_PASSWORD:-leninfitfreak}"
+    USER_FULL_NAME="${USER_FULL_NAME:-Load Generator}"
     PARALLEL_REQUESTS="${PARALLEL_REQUESTS:-4}"
     LOOP_SLEEP_SECONDS="${LOOP_SLEEP_SECONDS:-1}"
 
@@ -18,6 +19,12 @@ data:
         -H "Content-Type: application/json" \
         -d "{\"email\":\"$USER_EMAIL\",\"password\":\"$USER_PASSWORD\"}" || true)"
       echo "$resp" | sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+    }
+
+    signup() {
+      curl -sS -X POST "$FRONTEND_BASE/auth/signup" \
+        -H "Content-Type: application/json" \
+        -d "{\"fullName\":\"$USER_FULL_NAME\",\"email\":\"$USER_EMAIL\",\"password\":\"$USER_PASSWORD\"}" >/dev/null 2>&1 || true
     }
 
     TOKEN=""
@@ -29,6 +36,10 @@ data:
       # Refresh token when missing/expired
       if [ -z "$TOKEN" ]; then
         TOKEN="$(login)"
+        if [ -z "$TOKEN" ]; then
+          signup
+          TOKEN="$(login)"
+        fi
       fi
 
       if [ -n "$TOKEN" ]; then
@@ -40,7 +51,7 @@ data:
             price=$(( (i * 173 + $$) % 5000 + 100 ))
             payload="{\"name\":\"lt-item-$ts\",\"price\":$price,\"description\":\"loadtest generated item $ts\"}"
 
-            # Product creation + reads (drives app traces/DB; and Kafka in event flow)
+            # Product creation + reads + order placement (drives full trace chain and Kafka flow)
             code="$(curl -sS -o /tmp/lt-post-$i.out -w "%{http_code}" \
               -X POST "$FRONTEND_BASE/api/products" \
               -H "Authorization: Bearer $TOKEN" \
@@ -51,6 +62,12 @@ data:
               touch /tmp/lt-auth-fail
             fi
 
+            created_id="$(sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' /tmp/lt-post-$i.out | head -n1)"
+            if [ -n "$created_id" ]; then
+              curl -sS -o /tmp/lt-order-$i.out -w "%{http_code}" \
+                -X POST "$FRONTEND_BASE/api/products/$created_id/order" \
+                -H "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || true
+            fi
             curl -sS "$FRONTEND_BASE/api/products" -H "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || true
             curl -sS "$FRONTEND_BASE/api/orders" -H "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || true
           ) &
@@ -90,11 +107,13 @@ spec:
           command: ["/bin/sh", "/scripts/run.sh"]
           env:
             - name: FRONTEND_BASE
-              value: "http://leninkart-frontend.dev.svc.cluster.local"
+              value: "http://ingress-nginx-controller.ingress-nginx.svc.cluster.local"
             - name: USER_EMAIL
               value: "leninfitfreak@gmail.com"
             - name: USER_PASSWORD
               value: "leninfitfreak"
+            - name: USER_FULL_NAME
+              value: "Load Generator"
             - name: PARALLEL_REQUESTS
               value: "4"
             - name: LOOP_SLEEP_SECONDS
