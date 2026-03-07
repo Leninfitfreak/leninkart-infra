@@ -41,14 +41,3 @@ spec:
   trafficPolicy:
     tls:
       mode: DISABLE
----
-apiVersion: networking.istio.io/v1beta1
-kind: DestinationRule
-metadata:
-  name: dr-kafka
-  namespace: dev
-spec:
-  host: kafka.dev.svc.cluster.local
-  trafficPolicy:
-    tls:
-      mode: DISABLE

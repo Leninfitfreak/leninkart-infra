@@ -27,8 +27,7 @@ data:
         insecure_skip_verify: true
       kafkametrics:
         brokers:
-          - kafka-0.kafka.dev.svc.cluster.local:9092
-          - kafka-1.kafka.dev.svc.cluster.local:9092
+          - host.minikube.internal:9092
         protocol_version: 3.7.0
         scrapers:
           - brokers

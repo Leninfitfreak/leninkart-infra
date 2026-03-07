@@ -41,7 +41,8 @@ env:
   SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
   SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: 'true'
-  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-0.kafka.dev.svc.cluster.local:9092,kafka-1.kafka.dev.svc.cluster.local:9092
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: host.minikube.internal:9092
+  KAFKA_BOOTSTRAP_SERVERS: host.minikube.internal:9092
   APP_JWT_SECRET: "leninkart-dev-secret"
   APP_JWT_ISSUER: "leninkart"
   APP_JWT_TTL_SECONDS: "86400"
