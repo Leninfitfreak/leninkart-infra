@@ -12,6 +12,10 @@ spec:
       labels:
         app: product-service
     spec:
+      {{- if .Values.hostAliases }}
+      hostAliases:
+{{ toYaml .Values.hostAliases | indent 8 }}
+      {{- end }}
       containers:
         - name: product-service
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

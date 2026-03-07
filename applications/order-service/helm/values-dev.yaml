@@ -33,6 +33,10 @@ resources:
   limits:
     cpu: 500m
     memory: 768Mi
+hostAliases:
+  - ip: "192.168.49.1"
+    hostnames:
+      - "host.minikube.internal"
 env:
   JAVA_TOOL_OPTIONS: "-XX:InitialRAMPercentage=25 -XX:MaxRAMPercentage=70 -XX:+UseContainerSupport"
   # ---------- DATABASE ----------

@@ -14,6 +14,10 @@ spec:
       labels:
         {{- include "order-service.selectorLabels" . | nindent 8 }}
     spec:
+      {{- if .Values.hostAliases }}
+      hostAliases:
+{{ toYaml .Values.hostAliases | indent 8 }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
