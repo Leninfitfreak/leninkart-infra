@@ -45,6 +45,10 @@ spec:
         sidecar.istio.io/inject: "false"
     spec:
       serviceAccountName: otel-collector
+      hostAliases:
+        - ip: "192.168.56.1"
+          hostnames:
+            - "host.minikube.internal"
       containers:
         - name: otel-collector
           image: otel/opentelemetry-collector-contrib:0.92.0

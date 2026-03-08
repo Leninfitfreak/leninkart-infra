@@ -137,4 +137,4 @@ metadata:
 data:
   CLUSTER_NAME: minikube
   ENVIRONMENT: dev
-  OTEL_EXPORTER_ENDPOINT: "192.168.49.10:4317"
+  OTEL_EXPORTER_ENDPOINT: "host.minikube.internal:4317"
