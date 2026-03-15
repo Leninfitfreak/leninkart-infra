@@ -10,23 +10,31 @@ data:
     FRONTEND_BASE="${FRONTEND_BASE:-http://leninkart-frontend.dev.svc.cluster.local}"
     PRODUCT_BASE="${PRODUCT_BASE:-http://leninkart-product-service.dev.svc.cluster.local:8081}"
     ORDER_BASE="${ORDER_BASE:-http://leninkart-order-service.dev.svc.cluster.local:8080}"
-    USER_EMAIL="${USER_EMAIL:-leninfitfreak@gmail.com}"
+    USER_EMAIL_BASE="${USER_EMAIL_BASE:-telemetry-load}"
+    USER_EMAIL_DOMAIN="${USER_EMAIL_DOMAIN:-leninkart.local}"
     USER_PASSWORD="${USER_PASSWORD:-leninfitfreak}"
     USER_FULL_NAME="${USER_FULL_NAME:-Load Generator}"
     PARALLEL_REQUESTS="${PARALLEL_REQUESTS:-4}"
     LOOP_SLEEP_SECONDS="${LOOP_SLEEP_SECONDS:-1}"
+    HOST_ID="$(hostname 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')"
+    USER_EMAIL="${USER_EMAIL:-${USER_EMAIL_BASE}-${HOST_ID}@${USER_EMAIL_DOMAIN}}"
+
+    extract_token() {
+      sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+    }
 
     login() {
       resp="$(curl -sS -X POST "$PRODUCT_BASE/auth/login" \
         -H "Content-Type: application/json" \
         -d "{\"email\":\"$USER_EMAIL\",\"password\":\"$USER_PASSWORD\"}" || true)"
-      echo "$resp" | sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+      echo "$resp" | extract_token
     }
 
     signup() {
-      curl -sS -X POST "$PRODUCT_BASE/auth/signup" \
+      resp="$(curl -sS -X POST "$PRODUCT_BASE/auth/signup" \
         -H "Content-Type: application/json" \
-        -d "{\"fullName\":\"$USER_FULL_NAME\",\"email\":\"$USER_EMAIL\",\"password\":\"$USER_PASSWORD\"}" >/dev/null 2>&1 || true
+        -d "{\"fullName\":\"$USER_FULL_NAME\",\"email\":\"$USER_EMAIL\",\"password\":\"$USER_PASSWORD\"}" || true)"
+      echo "$resp" | extract_token
     }
 
     TOKEN=""
@@ -37,7 +45,9 @@ data:
       if [ -z "$TOKEN" ]; then
         TOKEN="$(login)"
         if [ -z "$TOKEN" ]; then
-          signup
+          TOKEN="$(signup)"
+        fi
+        if [ -z "$TOKEN" ]; then
           TOKEN="$(login)"
         fi
       fi
@@ -111,8 +121,10 @@ spec:
               value: "http://leninkart-product-service.dev.svc.cluster.local:8081"
             - name: ORDER_BASE
               value: "http://leninkart-order-service.dev.svc.cluster.local:8080"
-            - name: USER_EMAIL
-              value: "leninfitfreak@gmail.com"
+            - name: USER_EMAIL_BASE
+              value: "telemetry-load"
+            - name: USER_EMAIL_DOMAIN
+              value: "leninkart.local"
             - name: USER_PASSWORD
               value: "leninfitfreak"
             - name: USER_FULL_NAME
