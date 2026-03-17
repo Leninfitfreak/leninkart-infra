@@ -1,7 +1,7 @@
 replicaCount: 1
 image:
   repository: leninfitfreak/order-service
-  tag: "22540434225"
+  tag: "23211522580"
   pullPolicy: IfNotPresent
 service:
   type: ClusterIP
