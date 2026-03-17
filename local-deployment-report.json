@@ -1,13 +1,85 @@
-{
-  "generated_at": "2026-03-17T00:00:00Z",
-  "all_checks_passed": false,
-  "ingress_url": "http://127.0.0.1",
-  "checks": [
-    {
-      "name": "template",
-      "ok": false,
-      "details": "Run .\\scripts\\verify-local.ps1 to populate live checks.",
-      "checked_at": "2026-03-17T00:00:00Z"
-    }
-  ]
+﻿{
+    "generated_at":  "2026-03-18T00:42:06.9517401+05:30",
+    "all_checks_passed":  true,
+    "ingress_url":  "http://127.0.0.1",
+    "checks":  [
+                   {
+                       "name":  "docker",
+                       "ok":  true,
+                       "details":  "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe",
+                       "checked_at":  "2026-03-18T00:42:00"
+                   },
+                   {
+                       "name":  "kubectl",
+                       "ok":  true,
+                       "details":  "C:\\Program Files\\Docker\\Docker\\resources\\bin\\kubectl.exe",
+                       "checked_at":  "2026-03-18T00:42:00"
+                   },
+                   {
+                       "name":  "k3d",
+                       "ok":  true,
+                       "details":  "C:\\Users\\hp\\AppData\\Local\\Microsoft\\WinGet\\Packages\\k3d.k3d_Microsoft.Winget.Source_8wekyb3d8bbwe\\k3d.exe",
+                       "checked_at":  "2026-03-18T00:42:00"
+                   },
+                   {
+                       "name":  "docker-daemon",
+                       "ok":  true,
+                       "details":  "Docker daemon available.",
+                       "checked_at":  "2026-03-18T00:42:01"
+                   },
+                   {
+                       "name":  "k3d-cluster",
+                       "ok":  true,
+                       "details":  "k3d cluster leninkart-dev present: True",
+                       "checked_at":  "2026-03-18T00:42:01"
+                   },
+                   {
+                       "name":  "k8s-nodes",
+                       "ok":  true,
+                       "details":  "nodes output captured",
+                       "checked_at":  "2026-03-18T00:42:01"
+                   },
+                   {
+                       "name":  "k8s-pods-dev",
+                       "ok":  true,
+                       "details":  "frontend=True product=True order=True",
+                       "checked_at":  "2026-03-18T00:42:01"
+                   },
+                   {
+                       "name":  "argocd-root",
+                       "ok":  true,
+                       "details":  "leninkart-root health=Healthy",
+                       "checked_at":  "2026-03-18T00:42:01"
+                   },
+                   {
+                       "name":  "kafka-topics",
+                       "ok":  true,
+                       "details":  "topics: 5, required missing: ",
+                       "checked_at":  "2026-03-18T00:42:04"
+                   },
+                   {
+                       "name":  "frontend-ui",
+                       "ok":  true,
+                       "details":  "HTTP 200",
+                       "checked_at":  "2026-03-18T00:42:04"
+                   },
+                   {
+                       "name":  "observer-ui",
+                       "ok":  true,
+                       "details":  "HTTP 200",
+                       "checked_at":  "2026-03-18T00:42:04"
+                   },
+                   {
+                       "name":  "deep-observer-api",
+                       "ok":  true,
+                       "details":  "HTTP 200",
+                       "checked_at":  "2026-03-18T00:42:04"
+                   },
+                   {
+                       "name":  "sample-order-flow",
+                       "ok":  true,
+                       "details":  "Signup, login, create product, create order, get orders succeeded. orders=1.",
+                       "checked_at":  "2026-03-18T00:42:06"
+                   }
+               ]
 }

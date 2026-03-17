@@ -67,7 +67,8 @@ try {
 
 try {
   $clusters = & $k3d cluster list
-  $hasCluster = ($clusters -match 'leninkart-dev')
+  $clustersText = $clusters | Out-String
+  $hasCluster = [bool]($clustersText -match 'leninkart-dev')
   Add-Check 'k3d-cluster' $hasCluster "k3d cluster leninkart-dev present: $hasCluster"
 } catch { Add-Check 'k3d-cluster' $false $_.Exception.Message }
 
@@ -79,10 +80,10 @@ try {
 }
 
 try {
-  $pods = & $kubectl get pods -n dev
-  $hasFrontend = $pods -match 'frontend'
-  $hasProduct = $pods -match 'product-service|product'
-  $hasOrder = $pods -match 'order-service|order'
+  $pods = & $kubectl get pods -n dev --no-headers
+  $hasFrontend = ($pods | Where-Object { $_ -match 'frontend' -and $_ -match '1/1' }).Count -gt 0
+  $hasProduct = ($pods | Where-Object { $_ -match 'product-service|product' -and $_ -match '1/1' }).Count -gt 0
+  $hasOrder = ($pods | Where-Object { $_ -match 'order-service|order' -and $_ -match '1/1' }).Count -gt 0
   Add-Check 'k8s-pods-dev' ($hasFrontend -and $hasProduct -and $hasOrder) "frontend=$hasFrontend product=$hasProduct order=$hasOrder"
 } catch {
   Add-Check 'k8s-pods-dev' $false $_.Exception.Message
@@ -97,8 +98,10 @@ try {
 
 try {
   $kafkaTopicsRaw = & $docker exec kafka-platform sh -c "kafka-topics --bootstrap-server localhost:9092 --list 2>/dev/null"
-  $hasProductOrders = $kafkaTopicsRaw -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -eq 'product-orders' }
-  Add-Check 'kafka-topics' ($hasProductOrders.Count -gt 0) "topics: $(($kafkaTopicsRaw -split "`n" | Where-Object { $_.Trim() }).Count)"
+  $kafkaTopics = $kafkaTopicsRaw -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+  $requiredTopics = @('product-orders', 'product-events', 'order-events', 'order-created')
+  $hasRequiredTopics = $requiredTopics | Where-Object { $_ -in $kafkaTopics }
+  Add-Check 'kafka-topics' ($hasRequiredTopics.Count -eq $requiredTopics.Count) "topics: $($kafkaTopics.Count), required missing: $(($requiredTopics | Where-Object { $_ -notin $kafkaTopics }) -join ', ')"
 } catch {
   Add-Check 'kafka-topics' $false $_.Exception.Message
 }
@@ -145,7 +148,12 @@ try {
   if (-not $product.id) { throw 'product create response missing id' }
 
   $order = Invoke-RestMethod -Uri "$ingress/api/products/$($product.id)/order" -Method POST -Headers $headers -TimeoutSec 20
-  $orders = Invoke-RestMethod -Uri "$ingress/api/orders" -Method GET -Headers $headers -TimeoutSec 30
+  $orders = $null
+  for ($attempt = 0; $attempt -lt 6; $attempt++) {
+    Start-Sleep -Seconds 2
+    $orders = Invoke-RestMethod -Uri "$ingress/api/orders" -Method GET -Headers $headers -TimeoutSec 30
+    if ($orders -and $orders.Count -gt 0) { break }
+  }
   if (-not $orders) { throw 'orders list returned empty' }
 
   $orderFlowOk = $true
