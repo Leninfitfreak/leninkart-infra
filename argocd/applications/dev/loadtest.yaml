@@ -4,7 +4,7 @@ metadata:
   name: loadtest-dev
   namespace: argocd
 spec:
-  project: leninkart
+  project: default
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: dev
@@ -18,3 +18,4 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+

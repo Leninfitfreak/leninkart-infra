@@ -4,7 +4,7 @@ metadata:
   name: postgres-dev
   namespace: argocd
 spec:
-  project: leninkart
+  project: default
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: dev

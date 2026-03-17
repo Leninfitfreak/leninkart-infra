@@ -33,10 +33,7 @@ resources:
   limits:
     cpu: 500m
     memory: 768Mi
-hostAliases:
-  - ip: "10.127.196.86"
-    hostnames:
-      - "host.minikube.internal"
+# hostAliases removed for k3d; pods can resolve host.k3d.internal directly
 env:
   JAVA_TOOL_OPTIONS: "-XX:InitialRAMPercentage=25 -XX:MaxRAMPercentage=70 -XX:+UseContainerSupport"
   # ---------- DATABASE ----------
@@ -44,9 +41,11 @@ env:
   SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
   SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "60000"
+  SPRING_DATASOURCE_USERNAME: postgres
+  SPRING_DATASOURCE_PASSWORD: postgres
   # ---------- KAFKA ----------
-  SPRING_KAFKA_BOOTSTRAP_SERVERS: host.minikube.internal:9092
-  KAFKA_BOOTSTRAP_SERVERS: host.minikube.internal:9092
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: host.k3d.internal:9092
+  KAFKA_BOOTSTRAP_SERVERS: host.k3d.internal:9092
   MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus
   MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
   MANAGEMENT_HEALTH_KAFKA_ENABLED: "false"
@@ -96,7 +95,7 @@ annotations:
 # This replaces hardcoded environment variables with Vault-managed secrets
 secrets:
   vault:
-    enabled: true
+    enabled: false
     secretStore: vault-backend
     refreshInterval: 1h
     dbSecretName: order-service-db-secret

@@ -8,7 +8,7 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
-  project: leninkart
+  project: default
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: dev
@@ -39,3 +39,4 @@ spec:
       kind: Job
       jsonPointers:
         - /spec/template/metadata/labels
+

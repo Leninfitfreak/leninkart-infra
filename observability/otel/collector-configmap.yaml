@@ -27,7 +27,7 @@ data:
         insecure_skip_verify: true
       kafkametrics:
         brokers:
-          - host.minikube.internal:9092
+          - host.k3d.internal:9092
         protocol_version: 3.7.0
         scrapers:
           - brokers
@@ -135,6 +135,6 @@ metadata:
   labels:
     app: otel-collector
 data:
-  CLUSTER_NAME: minikube
+  CLUSTER_NAME: k3d-dev
   ENVIRONMENT: dev
-  OTEL_EXPORTER_ENDPOINT: "host.minikube.internal:4317"
+  OTEL_EXPORTER_ENDPOINT: "http://host.k3d.internal:4317"

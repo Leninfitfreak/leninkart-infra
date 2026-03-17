@@ -4,7 +4,7 @@ metadata:
   name: dev-product-service
   namespace: argocd
 spec:
-  project: leninkart
+  project: default
 
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
@@ -24,3 +24,4 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+

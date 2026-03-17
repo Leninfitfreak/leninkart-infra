@@ -13,10 +13,7 @@ resources:
   limits:
     cpu: 300m
     memory: 256Mi
-hostAliases:
-  - ip: "10.127.196.86"
-    hostnames:
-      - "host.minikube.internal"
+# hostAliases removed for k3d; pods can resolve host.k3d.internal directly
 startupProbe:
   httpGet:
     path: /actuator/health
@@ -45,8 +42,10 @@ env:
   SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
   SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: 'true'
-  SPRING_KAFKA_BOOTSTRAP_SERVERS: host.minikube.internal:9092
-  KAFKA_BOOTSTRAP_SERVERS: host.minikube.internal:9092
+  SPRING_DATASOURCE_USERNAME: postgres
+  SPRING_DATASOURCE_PASSWORD: postgres
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: host.k3d.internal:9092
+  KAFKA_BOOTSTRAP_SERVERS: host.k3d.internal:9092
   APP_JWT_SECRET: "leninkart-dev-secret"
   APP_JWT_ISSUER: "leninkart"
   APP_JWT_TTL_SECONDS: "86400"
@@ -93,7 +92,7 @@ annotations:
 # This replaces hardcoded environment variables with Vault-managed secrets
 secrets:
   vault:
-    enabled: true
+    enabled: false
     secretStore: vault-backend
     refreshInterval: 1h
     dbSecretName: product-service-db-secret

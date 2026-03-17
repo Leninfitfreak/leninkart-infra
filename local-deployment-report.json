@@ -1,0 +1,13 @@
+{
+  "generated_at": "2026-03-17T00:00:00Z",
+  "all_checks_passed": false,
+  "ingress_url": "http://127.0.0.1",
+  "checks": [
+    {
+      "name": "template",
+      "ok": false,
+      "details": "Run .\\scripts\\verify-local.ps1 to populate live checks.",
+      "checked_at": "2026-03-17T00:00:00Z"
+    }
+  ]
+}
