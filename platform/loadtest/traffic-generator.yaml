@@ -16,6 +16,8 @@ data:
     USER_FULL_NAME="${USER_FULL_NAME:-Load Generator}"
     PARALLEL_REQUESTS="${PARALLEL_REQUESTS:-4}"
     LOOP_SLEEP_SECONDS="${LOOP_SLEEP_SECONDS:-1}"
+    REQUEST_TIMEOUT_SECONDS="${REQUEST_TIMEOUT_SECONDS:-6}"
+    MAX_AUTH_ATTEMPTS="${MAX_AUTH_ATTEMPTS:-3}"
     HOST_ID="$(hostname 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')"
     USER_EMAIL="${USER_EMAIL:-${USER_EMAIL_BASE}-${HOST_ID}@${USER_EMAIL_DOMAIN}}"
 
@@ -23,33 +25,45 @@ data:
       sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
     }
 
+    new_email() {
+      ts="$(date +%s)"
+      echo "${USER_EMAIL_BASE}-${HOST_ID}-${ts}-$$@${USER_EMAIL_DOMAIN}"
+    }
+
     login() {
-      resp="$(curl -sS -X POST "$PRODUCT_BASE/auth/login" \
+      email="$1"
+      resp="$(curl -sS --max-time "$REQUEST_TIMEOUT_SECONDS" -X POST "$PRODUCT_BASE/auth/login" \
         -H "Content-Type: application/json" \
-        -d "{\"email\":\"$USER_EMAIL\",\"password\":\"$USER_PASSWORD\"}" || true)"
+        -d "{\"email\":\"$email\",\"password\":\"$USER_PASSWORD\"}" || true)"
       echo "$resp" | extract_token
     }
 
     signup() {
-      resp="$(curl -sS -X POST "$PRODUCT_BASE/auth/signup" \
+      email="$1"
+      resp="$(curl -sS --max-time "$REQUEST_TIMEOUT_SECONDS" -X POST "$PRODUCT_BASE/auth/signup" \
         -H "Content-Type: application/json" \
-        -d "{\"fullName\":\"$USER_FULL_NAME\",\"email\":\"$USER_EMAIL\",\"password\":\"$USER_PASSWORD\"}" || true)"
+        -d "{\"fullName\":\"$USER_FULL_NAME\",\"email\":\"$email\",\"password\":\"$USER_PASSWORD\"}" || true)"
       echo "$resp" | extract_token
     }
 
     TOKEN=""
+    CURRENT_EMAIL="$USER_EMAIL"
 
     while true; do
       curl -sS "$FRONTEND_BASE/" >/dev/null 2>&1 || true
 
       if [ -z "$TOKEN" ]; then
-        TOKEN="$(login)"
-        if [ -z "$TOKEN" ]; then
-          TOKEN="$(signup)"
-        fi
-        if [ -z "$TOKEN" ]; then
-          TOKEN="$(login)"
-        fi
+        attempt=1
+        while [ "$attempt" -le "$MAX_AUTH_ATTEMPTS" ] && [ -z "$TOKEN" ]; do
+          TOKEN="$(login "$CURRENT_EMAIL")"
+          if [ -z "$TOKEN" ]; then
+            TOKEN="$(signup "$CURRENT_EMAIL")"
+          fi
+          if [ -z "$TOKEN" ]; then
+            CURRENT_EMAIL="$(new_email)"
+          fi
+          attempt=$((attempt + 1))
+        done
       fi
 
       if [ -n "$TOKEN" ]; then
@@ -61,7 +75,7 @@ data:
             price=$(( (i * 173 + $$) % 5000 + 100 ))
             payload="{\"name\":\"lt-item-$ts\",\"price\":$price,\"description\":\"loadtest generated item $ts\"}"
 
-            code="$(curl -sS -o /tmp/lt-post-$i.out -w "%{http_code}" \
+            code="$(curl -sS --max-time "$REQUEST_TIMEOUT_SECONDS" -o /tmp/lt-post-$i.out -w "%{http_code}" \
               -X POST "$PRODUCT_BASE/api/products" \
               -H "Authorization: Bearer $TOKEN" \
               -H "Content-Type: application/json" \
@@ -73,13 +87,16 @@ data:
 
             created_id="$(sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' /tmp/lt-post-$i.out | head -n1)"
             if [ -n "$created_id" ]; then
-              curl -sS -o /tmp/lt-order-$i.out -w "%{http_code}" \
+              order_code="$(curl -sS --max-time "$REQUEST_TIMEOUT_SECONDS" -o /tmp/lt-order-$i.out -w "%{http_code}" \
                 -X POST "$PRODUCT_BASE/api/products/$created_id/order" \
-                -H "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || true
+                -H "Authorization: Bearer $TOKEN" || true)"
+              if [ "$order_code" = "401" ] || [ "$order_code" = "403" ]; then
+                touch /tmp/lt-auth-fail
+              fi
             fi
 
-            curl -sS "$PRODUCT_BASE/api/products" -H "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || true
-            curl -sS "$ORDER_BASE/api/orders" -H "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || true
+            curl -sS --max-time "$REQUEST_TIMEOUT_SECONDS" "$PRODUCT_BASE/api/products" -H "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || true
+            curl -sS --max-time "$REQUEST_TIMEOUT_SECONDS" "$ORDER_BASE/api/orders" -H "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || true
           ) &
           i=$((i + 1))
         done
@@ -87,6 +104,7 @@ data:
 
         if [ -f /tmp/lt-auth-fail ]; then
           TOKEN=""
+          CURRENT_EMAIL="$(new_email)"
         fi
       fi
 
