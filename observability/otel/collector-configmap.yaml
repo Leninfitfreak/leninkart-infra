@@ -27,7 +27,7 @@ data:
         insecure_skip_verify: true
       kafkametrics:
         brokers:
-          - host.k3d.internal:9092
+          - 172.18.0.1:9092
         protocol_version: 3.7.0
         scrapers:
           - brokers
@@ -137,4 +137,4 @@ metadata:
 data:
   CLUSTER_NAME: k3d-dev
   ENVIRONMENT: dev
-  OTEL_EXPORTER_ENDPOINT: "http://host.k3d.internal:4317"
+  OTEL_EXPORTER_ENDPOINT: "http://172.18.0.1:4317"

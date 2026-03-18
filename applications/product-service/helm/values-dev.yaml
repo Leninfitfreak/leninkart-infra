@@ -13,7 +13,7 @@ resources:
   limits:
     cpu: 300m
     memory: 256Mi
-# hostAliases removed for k3d; pods can resolve host.k3d.internal directly
+# hostAliases removed for k3d; pods can resolve 172.18.0.1 directly
 startupProbe:
   httpGet:
     path: /actuator/health
@@ -44,8 +44,8 @@ env:
   SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: 'true'
   SPRING_DATASOURCE_USERNAME: postgres
   SPRING_DATASOURCE_PASSWORD: postgres
-  SPRING_KAFKA_BOOTSTRAP_SERVERS: host.k3d.internal:9092
-  KAFKA_BOOTSTRAP_SERVERS: host.k3d.internal:9092
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: 172.18.0.1:9092
+  KAFKA_BOOTSTRAP_SERVERS: 172.18.0.1:9092
   APP_JWT_SECRET: "leninkart-dev-secret"
   APP_JWT_ISSUER: "leninkart"
   APP_JWT_TTL_SECONDS: "86400"
