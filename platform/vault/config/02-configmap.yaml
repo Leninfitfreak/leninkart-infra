@@ -26,3 +26,12 @@ data:
     disable_mlock = true
     default_lease_ttl = "168h"
     max_lease_ttl = "720h"
+  leninkart-policy.hcl: |
+    # LeninKart platform secrets
+    path "secret/data/leninkart/*" {
+      capabilities = ["create", "read", "update", "delete", "list"]
+    }
+
+    path "secret/metadata/leninkart/*" {
+      capabilities = ["read", "list", "delete"]
+    }

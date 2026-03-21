@@ -29,10 +29,74 @@ spec:
             - -c
           args:
             - |
-              # Wait a bit to ensure clean startup
-              sleep 2
-              # Start Vault server
-              vault server -config=/vault/config/vault-config.hcl
+              set -eu
+
+              wait_for_vault() {
+                for _ in $(seq 1 60); do
+                  STATUS_OUTPUT="$(vault status 2>&1 || true)"
+                  if ! printf '%s' "$STATUS_OUTPUT" | grep -Eq 'connection refused|context deadline exceeded|Client sent an HTTP request to an HTTPS server|no such host'; then
+                    return 0
+                  fi
+                  sleep 2
+                done
+                return 1
+              }
+
+              vault server -config=/vault/config/vault-config.hcl &
+              VAULT_PID=$!
+              trap 'kill $VAULT_PID; wait $VAULT_PID' TERM INT
+
+              wait_for_vault
+
+              export VAULT_ADDR="http://127.0.0.1:8200"
+
+              STATUS_OUTPUT="$(vault status 2>&1 || true)"
+              if printf '%s' "$STATUS_OUTPUT" | grep -q "Initialized.*false"; then
+                vault operator init -key-shares=1 -key-threshold=1 -format=json > /vault/data/bootstrap-keys.json
+                chmod 600 /vault/data/bootstrap-keys.json
+              fi
+
+              if [ ! -f /vault/data/bootstrap-keys.json ]; then
+                echo "Vault bootstrap file missing; cannot continue." >&2
+                exit 1
+              fi
+
+              BOOTSTRAP_JSON="$(tr -d '\n\r\t ' < /vault/data/bootstrap-keys.json)"
+              UNSEAL_KEY="$(printf '%s' "$BOOTSTRAP_JSON" | sed -n 's/.*"unseal_keys_b64":\["\([^"]*\)".*/\1/p')"
+              ROOT_TOKEN="$(printf '%s' "$BOOTSTRAP_JSON" | sed -n 's/.*"root_token":"\([^"]*\)".*/\1/p')"
+
+              if [ -n "$UNSEAL_KEY" ]; then
+                vault operator unseal "$UNSEAL_KEY" >/dev/null 2>&1 || true
+              fi
+
+              if [ -n "$ROOT_TOKEN" ]; then
+                export VAULT_TOKEN="$ROOT_TOKEN"
+                vault login -no-print "$ROOT_TOKEN" >/dev/null 2>&1 || true
+              fi
+
+              if ! vault secrets list -format=json 2>/dev/null | grep -q '"secret/"'; then
+                vault secrets enable -path=secret -version=2 kv >/dev/null
+              fi
+
+              if ! vault auth list -format=json 2>/dev/null | grep -q '"kubernetes/"'; then
+                vault auth enable kubernetes >/dev/null
+              fi
+
+              SA_TOKEN="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
+              K8S_HOST="https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT_HTTPS}"
+              vault write auth/kubernetes/config \
+                token_reviewer_jwt="$SA_TOKEN" \
+                kubernetes_host="$K8S_HOST" \
+                kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt >/dev/null
+
+              vault policy write leninkart-policy /vault/config/policies/leninkart-policy.hcl >/dev/null
+              vault write auth/kubernetes/role/leninkart-role \
+                bound_service_account_names=vault-auth \
+                bound_service_account_namespaces=dev \
+                policies=leninkart-policy \
+                ttl=24h >/dev/null
+
+              wait $VAULT_PID
           env:
             - name: VAULT_ADDR
               value: "http://127.0.0.1:8200"
@@ -82,10 +146,24 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 10
+          startupProbe:
+            httpGet:
+              path: /v1/sys/health
+              port: 8200
+              scheme: HTTP
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
       volumes:
         - name: config
           configMap:
             name: vault-config
+            items:
+              - key: vault-config.hcl
+                path: vault-config.hcl
+              - key: leninkart-policy.hcl
+                path: policies/leninkart-policy.hcl
   volumeClaimTemplates:
     - metadata:
         name: data
