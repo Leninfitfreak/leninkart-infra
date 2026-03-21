@@ -51,12 +51,9 @@ Run full validation engine (if dependencies are available):
 
 - Frontend: `http://127.0.0.1/`
 - Observer Stack: `http://127.0.0.1:8080`
-- Deep Observer: `http://127.0.0.1:3000`
-- Deep Observer API health: `http://127.0.0.1:8081/health`
 - ArgoCD UI: port-forward `kubectl port-forward -n argocd svc/argocd-server 8085:443`
 
 ## Validation artifacts
 
 - Runtime checks: `LOCAL_DEPLOYMENT.md`
 - Latest run output: `local-deployment-report.json`
-

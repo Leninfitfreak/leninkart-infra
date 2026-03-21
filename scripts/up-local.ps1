@@ -240,5 +240,3 @@ Write-Host 'Deployment bootstrap complete.'
 Write-Host "Frontend: http://127.0.0.1/"
 Write-Host "ArgoCD: kubectl port-forward -n argocd svc/argocd-server 8085:443"
 Write-Host "Observer stack: http://127.0.0.1:8080"
-Write-Host "Deep Observer: http://127.0.0.1:3000"
-Write-Host "Deep Observer API health: http://127.0.0.1:8081/health"

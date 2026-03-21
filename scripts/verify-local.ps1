@@ -121,13 +121,6 @@ try {
   Add-Check 'observer-ui' $false $_.Exception.Message
 }
 
-try {
-  $deepCode = Http-Check 'deep-observer-api' 'http://127.0.0.1:8081/health'
-  Add-Check 'deep-observer-api' ($deepCode -eq 200) "HTTP $deepCode"
-} catch {
-  Add-Check 'deep-observer-api' $false $_.Exception.Message
-}
-
 $orderFlowOk = $false
 $orderFlowDetails = ''
 try {

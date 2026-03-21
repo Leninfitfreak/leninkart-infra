@@ -70,12 +70,6 @@
                        "checked_at":  "2026-03-18T00:46:30"
                    },
                    {
-                       "name":  "deep-observer-api",
-                       "ok":  true,
-                       "details":  "HTTP 200",
-                       "checked_at":  "2026-03-18T00:46:30"
-                   },
-                   {
                        "name":  "sample-order-flow",
                        "ok":  true,
                        "details":  "Signup, login, create product, create order, get orders succeeded. orders=1.",
