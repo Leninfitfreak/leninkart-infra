@@ -1037,7 +1037,7 @@ dashboards:
                     "type": "prometheus",
                     "uid": "prometheus"
                   },
-                  "expr": "sum(rate(kafka_server_brokertopicmetrics_messagesin_total[5m]))",
+                  "expr": "sum(rate(kafka_server_brokertopicmetrics_messagesinpersec_count_total[5m]))",
                   "legendFormat": "messages in"
                 }
               ],
@@ -1082,7 +1082,7 @@ dashboards:
                     "type": "prometheus",
                     "uid": "prometheus"
                   },
-                  "expr": "sum(rate(kafka_server_brokertopicmetrics_bytesin_total[5m]))",
+                  "expr": "sum(rate(kafka_server_brokertopicmetrics_bytesinpersec_count_total[5m]))",
                   "legendFormat": "bytes in"
                 }
               ],
