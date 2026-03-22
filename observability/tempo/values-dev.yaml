@@ -3,6 +3,7 @@ fullnameOverride: tempo
 tempo:
   reportingEnabled: false
   retention: 24h
+  memBallastSizeMbs: 64
   metricsGenerator:
     enabled: false
   server:
