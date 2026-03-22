@@ -53,6 +53,520 @@ datasources:
         jsonData:
           httpMethod: GET
 
+alerting:
+  rules.yaml:
+    apiVersion: 1
+    groups:
+      - orgId: 1
+        name: leninkart-platform-alerts
+        folder: LeninKart
+        interval: 1m
+        rules:
+          - uid: product-service-down
+            title: "Product Service Down"
+            condition: B
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  editorMode: code
+                  expr: "up{job=\"product-service\"}"
+                  instant: false
+                  intervalMs: 1000
+                  legendFormat: __auto
+                  maxDataPoints: 43200
+                  range: true
+                  refId: A
+              - refId: B
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params:
+                          - 1.0
+                        type: lt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - A
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+                  type: threshold
+            noDataState: Alerting
+            execErrState: Error
+            for: 2m
+            annotations:
+              summary: "Product service metrics are unavailable"
+              description: "The product-service scrape target stayed below the configured health threshold for 2m."
+            labels:
+              severity: critical
+              service: product-service
+            isPaused: false
+          - uid: order-service-down
+            title: "Order Service Down"
+            condition: B
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  editorMode: code
+                  expr: "up{job=\"order-service\"}"
+                  instant: false
+                  intervalMs: 1000
+                  legendFormat: __auto
+                  maxDataPoints: 43200
+                  range: true
+                  refId: A
+              - refId: B
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params:
+                          - 1.0
+                        type: lt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - A
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+                  type: threshold
+            noDataState: Alerting
+            execErrState: Error
+            for: 2m
+            annotations:
+              summary: "Order service metrics are unavailable"
+              description: "The order-service scrape target stayed below the configured health threshold for 2m."
+            labels:
+              severity: critical
+              service: order-service
+            isPaused: false
+          - uid: product-service-high-latency
+            title: "Product Service High Latency"
+            condition: B
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  editorMode: code
+                  expr: "rate(http_server_requests_seconds_sum{job=\"product-service\",uri!~\".*actuator.*\"}[5m]) / clamp_min(rate(http_server_requests_seconds_count{job=\"product-service\",uri!~\".*actuator.*\"}[5m]), 0.001)"
+                  instant: false
+                  intervalMs: 1000
+                  legendFormat: __auto
+                  maxDataPoints: 43200
+                  range: true
+                  refId: A
+              - refId: B
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params:
+                          - 1.5
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - A
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+                  type: threshold
+            noDataState: NoData
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: "Product service latency is elevated"
+              description: "Average product-service latency exceeded 1.5s for 5m."
+            labels:
+              severity: warning
+              service: product-service
+            isPaused: false
+          - uid: order-service-high-latency
+            title: "Order Service High Latency"
+            condition: B
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  editorMode: code
+                  expr: "rate(http_server_requests_seconds_sum{job=\"order-service\",uri!~\".*actuator.*\"}[5m]) / clamp_min(rate(http_server_requests_seconds_count{job=\"order-service\",uri!~\".*actuator.*\"}[5m]), 0.001)"
+                  instant: false
+                  intervalMs: 1000
+                  legendFormat: __auto
+                  maxDataPoints: 43200
+                  range: true
+                  refId: A
+              - refId: B
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params:
+                          - 1.5
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - A
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+                  type: threshold
+            noDataState: NoData
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: "Order service latency is elevated"
+              description: "Average order-service latency exceeded 1.5s for 5m."
+            labels:
+              severity: warning
+              service: order-service
+            isPaused: false
+          - uid: product-service-high-error-rate
+            title: "Product Service High Error Rate"
+            condition: B
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  editorMode: code
+                  expr: "sum(rate(http_server_requests_seconds_count{job=\"product-service\",status=~\"5..\",uri!~\".*actuator.*\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{job=\"product-service\",uri!~\".*actuator.*\"}[5m])), 0.001)"
+                  instant: false
+                  intervalMs: 1000
+                  legendFormat: __auto
+                  maxDataPoints: 43200
+                  range: true
+                  refId: A
+              - refId: B
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params:
+                          - 0.05
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - A
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+                  type: threshold
+            noDataState: NoData
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: "Product service error rate is elevated"
+              description: "Product-service 5xx ratio exceeded 0.05 for 5m."
+            labels:
+              severity: warning
+              service: product-service
+            isPaused: false
+          - uid: order-service-high-error-rate
+            title: "Order Service High Error Rate"
+            condition: B
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  editorMode: code
+                  expr: "sum(rate(http_server_requests_seconds_count{job=\"order-service\",status=~\"5..\",uri!~\".*actuator.*\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{job=\"order-service\",uri!~\".*actuator.*\"}[5m])), 0.001)"
+                  instant: false
+                  intervalMs: 1000
+                  legendFormat: __auto
+                  maxDataPoints: 43200
+                  range: true
+                  refId: A
+              - refId: B
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params:
+                          - 0.05
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - A
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+                  type: threshold
+            noDataState: NoData
+            execErrState: Error
+            for: 5m
+            annotations:
+              summary: "Order service error rate is elevated"
+              description: "Order-service 5xx ratio exceeded 0.05 for 5m."
+            labels:
+              severity: warning
+              service: order-service
+            isPaused: false
+          - uid: product-service-low-traffic
+            title: "Product Service Low Traffic"
+            condition: B
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  editorMode: code
+                  expr: "sum(rate(http_server_requests_seconds_count{job=\"product-service\",uri!~\".*actuator.*\"}[5m]))"
+                  instant: false
+                  intervalMs: 1000
+                  legendFormat: __auto
+                  maxDataPoints: 43200
+                  range: true
+                  refId: A
+              - refId: B
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params:
+                          - 0.05
+                        type: lt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - A
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+                  type: threshold
+            noDataState: NoData
+            execErrState: Error
+            for: 10m
+            annotations:
+              summary: "Product service traffic dropped"
+              description: "Product-service request rate stayed below 0.05 req/s for 10m."
+            labels:
+              severity: warning
+              service: product-service
+            isPaused: false
+          - uid: order-service-low-traffic
+            title: "Order Service Low Traffic"
+            condition: B
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  editorMode: code
+                  expr: "sum(rate(http_server_requests_seconds_count{job=\"order-service\",uri!~\".*actuator.*\"}[5m]))"
+                  instant: false
+                  intervalMs: 1000
+                  legendFormat: __auto
+                  maxDataPoints: 43200
+                  range: true
+                  refId: A
+              - refId: B
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params:
+                          - 0.05
+                        type: lt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - A
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+                  type: threshold
+            noDataState: NoData
+            execErrState: Error
+            for: 10m
+            annotations:
+              summary: "Order service traffic dropped"
+              description: "Order-service request rate stayed below 0.05 req/s for 10m."
+            labels:
+              severity: warning
+              service: order-service
+            isPaused: false
+          - uid: kafka-platform-unhealthy
+            title: "Kafka Platform Unhealthy"
+            condition: B
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  editorMode: code
+                  expr: "up{job=\"kafka-platform\"}"
+                  instant: false
+                  intervalMs: 1000
+                  legendFormat: __auto
+                  maxDataPoints: 43200
+                  range: true
+                  refId: A
+              - refId: B
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                datasourceUid: __expr__
+                model:
+                  conditions:
+                    - evaluator:
+                        params:
+                          - 1.0
+                        type: lt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - A
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  expression: A
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+                  type: threshold
+            noDataState: Alerting
+            execErrState: Error
+            for: 3m
+            annotations:
+              summary: "Kafka exporter is unhealthy"
+              description: "The kafka-platform metrics target stayed below 1 for 3m."
+            labels:
+              severity: critical
+              service: kafka-platform
+            isPaused: false
+
 dashboardProviders:
   dashboardproviders.yaml:
     apiVersion: 1
