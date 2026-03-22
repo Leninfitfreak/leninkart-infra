@@ -5,7 +5,6 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = 'D:\Projects\Services'
 $kafkaDir = Join-Path $repoRoot 'kafka-platform'
-$observerDir = Join-Path $repoRoot 'observer-stack\deploy\docker'
 
 function Resolve-Tool {
   [CmdletBinding()]
@@ -34,10 +33,6 @@ $kubectl = Resolve-Tool -Name 'kubectl' -Fallbacks @('C:\Program Files\Docker\Do
 Write-Host 'Stopping Kafka compose stack.'
 Set-Location $kafkaDir
 & $docker compose -f (Join-Path $kafkaDir 'docker-compose.yml') -p 'kafka-platform' down -v --remove-orphans
-
-Write-Host 'Stopping Observer stack compose.'
-Set-Location $observerDir
-& $docker compose -f (Join-Path $observerDir 'docker-compose.yaml') -p 'observer-stack' down -v --remove-orphans
 
 if (-not $KeepCluster) {
   Write-Host 'Removing k3d cluster leninkart-dev.'

@@ -97,6 +97,16 @@ try {
 }
 
 try {
+  $svcOutput = & $kubectl get svc -n dev
+  $hasGrafana = ($svcOutput | Select-String 'grafana').Count -gt 0
+  $hasLoki = ($svcOutput | Select-String 'loki').Count -gt 0
+  $hasPrometheus = ($svcOutput | Select-String 'prometheus-server').Count -gt 0
+  Add-Check 'observability-services' ($hasGrafana -and $hasLoki -and $hasPrometheus) "grafana=$hasGrafana loki=$hasLoki prometheus=$hasPrometheus"
+} catch {
+  Add-Check 'observability-services' $false $_.Exception.Message
+}
+
+try {
   $kafkaTopicsRaw = & $docker exec kafka-platform sh -c "kafka-topics --bootstrap-server localhost:9092 --list 2>/dev/null"
   $kafkaTopics = $kafkaTopicsRaw -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ }
   $requiredTopics = @('product-orders', 'product-events', 'order-events', 'order-created')
@@ -112,13 +122,6 @@ try {
   Add-Check 'frontend-ui' ($frontendCode -eq 200) "HTTP $frontendCode"
 } catch {
   Add-Check 'frontend-ui' $false $_.Exception.Message
-}
-
-try {
-  $obsCode = Http-Check 'observer-stack-ui' 'http://127.0.0.1:8080/'
-  Add-Check 'observer-ui' ($obsCode -eq 200) "HTTP $obsCode"
-} catch {
-  Add-Check 'observer-ui' $false $_.Exception.Message
 }
 
 $orderFlowOk = $false

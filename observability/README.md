@@ -1,18 +1,16 @@
 # Observability
 
-Monitoring, metrics, and distributed tracing.
+GitOps-managed observability for LeninKart using Prometheus, Grafana, Loki, and Promtail.
 
 ## Components
-- **prometheus**: Metrics collection and storage
-- **grafana**: Metrics visualization and dashboards
-- **jaeger**: Distributed tracing
-- **otel**: OpenTelemetry collector for trace/metric collection
+- **prometheus**: scrape-based metrics collection for product-service, order-service, and Kafka
+- **grafana**: dashboards, login, and operator-facing visualization
+- **loki**: lightweight log storage for Kubernetes application logs
+- **promtail**: Kubernetes log shipping into Loki
 
 ## Architecture
 ```
-Services → OTel Collector → Prometheus (metrics)
-                          ↓
-                        Jaeger (traces)
-                          ↓
-                    Grafana (visualization)
+Kubernetes services -> Prometheus -> Grafana
+Kubernetes pod logs -> Promtail -> Loki -> Grafana
+Kafka JMX exporter -> Prometheus -> Grafana
 ```

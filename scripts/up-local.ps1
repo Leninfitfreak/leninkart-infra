@@ -9,7 +9,6 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = $WorkspaceRoot
 $kafkaDir = Join-Path $repoRoot 'kafka-platform'
-$observerDir = Join-Path $repoRoot 'observer-stack\deploy\docker'
 $infraDir = Join-Path $repoRoot 'leninkart-infra'
 $clusterName = 'leninkart-dev'
 $expectedContext = $ContextName
@@ -104,43 +103,6 @@ function Ensure-K3dCluster {
   }
 }
 
-function Ensure-ExternalConnectivity {
-  $expectedLabel = 'com.docker.compose.network'
-  $existing = & $docker network ls --format '{{.Name}}' 2>$null | Select-String '^signoz-net$'
-  $needsCreate = $false
-
-  if (-not $existing) {
-    $needsCreate = $true
-  }
-  else {
-    try {
-      $inspect = & $docker network inspect signoz-net --format '{{json .}}' 2>$null | ConvertFrom-Json
-      $labelValue = $inspect.ConfigOnly + '' # keep JSON shape simple if parse edge case
-      if ($inspect.Labels) {
-        $labelValue = $inspect.Labels."$expectedLabel"
-      }
-      if ($labelValue -ne 'signoz-net') {
-        $needsCreate = $true
-        Write-Host "Existing signoz-net does not match compose labels. Recreating."
-      }
-    }
-    catch {
-      $needsCreate = $true
-    }
-  }
-
-  if ($needsCreate) {
-    if ($existing) {
-      & $docker network rm signoz-net >$null 2>&1
-    }
-    & $docker network create signoz-net `
-      --driver bridge `
-      --label 'com.docker.compose.network=signoz-net' `
-      --label 'com.docker.compose.project=observer-stack' `
-      --label 'com.docker.compose.version=2.34.0' >$null 2>&1
-  }
-}
-
 function Wait-ForKafka {
   $maxAttempts = 60
   for ($i = 0; $i -lt $maxAttempts; $i++) {
@@ -207,22 +169,15 @@ Ensure-K3dCluster
 Write-Host '3/7) Applying kubectl context'
 & $kubectl config use-context $expectedContext | Out-Null
 
-Write-Host '4/7) Ensuring support networks'
-Ensure-ExternalConnectivity
-
-Write-Host '5/7) Starting Kafka compose'
+Write-Host '4/7) Starting Kafka compose'
 Set-Location $kafkaDir
 & $docker compose -f (Join-Path $kafkaDir 'docker-compose.yml') -p 'kafka-platform' up -d
 Wait-ForKafka
 
-Write-Host '6/7) Creating Kafka topics'
+Write-Host '5/7) Creating Kafka topics'
 & $docker exec kafka-platform sh -c 'sh /usr/local/bin/create-topics.sh'
 
-Write-Host '7/7) Starting Observer stack compose'
-Set-Location $observerDir
-& $docker compose -f (Join-Path $observerDir 'docker-compose.yaml') -p 'observer-stack' up -d
-
-Write-Host 'Installing ArgoCD and syncing GitOps root.'
+Write-Host '6/7) Installing ArgoCD and syncing GitOps root'
 Ensure-ArgoCD
 & $kubectl create namespace dev --dry-run=client -o yaml | & $kubectl apply -f -
 & $kubectl apply -n argocd -f (Join-Path $infraDir 'argocd\leninkart-root.yaml')
@@ -230,7 +185,7 @@ Ensure-ArgoCD
 Ensure-IngressController -Helm $helm
 & $kubectl wait --namespace ingress-nginx --for=condition=available deploy/ingress-nginx-controller --timeout=240s | Out-Null
 
-Write-Host 'Waiting for application pods.'
+Write-Host '7/7) Waiting for application pods'
 Wait-Service -Namespace 'argocd' -Label 'app.kubernetes.io/name=argocd-server'
 Wait-Service -Namespace 'dev' -Label 'app=frontend'
 Wait-Service -Namespace 'dev' -Label 'app=product-service'
@@ -239,4 +194,5 @@ Wait-Service -Namespace 'dev' -Label 'app.kubernetes.io/name=order-service'
 Write-Host 'Deployment bootstrap complete.'
 Write-Host "Frontend: http://127.0.0.1/"
 Write-Host "ArgoCD: kubectl port-forward -n argocd svc/argocd-server 8085:443"
-Write-Host "Observer stack: http://127.0.0.1:8080"
+Write-Host "Grafana: kubectl port-forward -n dev svc/grafana 3000:80"
+Write-Host "Prometheus: kubectl port-forward -n dev svc/prometheus-server 9090:80"
