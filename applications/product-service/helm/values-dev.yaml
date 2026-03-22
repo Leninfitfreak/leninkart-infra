@@ -50,6 +50,8 @@ env:
   MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus
   MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED: "true"
   MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED: "true"
+  MANAGEMENT_TRACING_ENABLED: "false"
+  OTEL_SDK_DISABLED: "true"
 annotations:
   prometheus.io/scrape: "true"
   prometheus.io/port: "8081"
