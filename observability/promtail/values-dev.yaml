@@ -12,6 +12,25 @@ config:
   clients:
     - url: http://loki.dev.svc.cluster.local:3100/loki/api/v1/push
   snippets:
+    pipelineStages:
+      - cri: {}
+      - regex:
+          expression: '^(?:.*? : )?(?P<json_payload>\{.*\})$'
+      - json:
+          source: json_payload
+          expressions:
+            level: level
+            service: service
+            operation: operation
+            trace_id: trace_id
+            span_id: span_id
+      - labels:
+          level:
+          service:
+      - structured_metadata:
+          operation:
+          trace_id:
+          span_id:
     extraRelabelConfigs:
       - action: keep
         source_labels:
