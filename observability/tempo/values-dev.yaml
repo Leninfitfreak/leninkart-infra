@@ -3,7 +3,7 @@ fullnameOverride: tempo
 tempo:
   reportingEnabled: false
   retention: 24h
-  memBallastSizeMbs: 64
+  memBallastSizeMbs: 16
   metricsGenerator:
     enabled: false
   server:
@@ -18,10 +18,10 @@ tempo:
   resources:
     requests:
       cpu: 100m
-      memory: 256Mi
+      memory: 384Mi
     limits:
       cpu: 500m
-      memory: 512Mi
+      memory: 1Gi
 
 service:
   type: ClusterIP
