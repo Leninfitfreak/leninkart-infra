@@ -45,6 +45,13 @@ datasources:
         type: loki
         access: proxy
         url: http://loki.dev.svc.cluster.local:3100
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        access: proxy
+        url: http://tempo.dev.svc.cluster.local:3200
+        jsonData:
+          httpMethod: GET
 
 dashboardProviders:
   dashboardproviders.yaml:
