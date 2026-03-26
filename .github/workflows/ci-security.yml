@@ -1,0 +1,48 @@
+name: Infra Quality & Security
+
+on:
+  push:
+    branches:
+      - dev
+      - staging
+      - main
+  pull_request:
+    branches:
+      - dev
+      - staging
+      - main
+  workflow_dispatch:
+
+jobs:
+  validate-infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint Helm charts
+        shell: bash
+        run: |
+          set -euo pipefail
+          helm lint applications/frontend/helm
+          helm lint applications/product-service/helm --values applications/product-service/helm/values-dev.yaml
+          helm lint applications/order-service/helm --values applications/order-service/helm/values-dev.yaml
+
+      - name: Run Gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Trivy config scan
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: 0
