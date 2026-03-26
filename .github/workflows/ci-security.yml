@@ -38,11 +38,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy config scan
-        uses: aquasecurity/trivy-action@v0.33.1
-        with:
-          scan-type: config
-          scan-ref: .
-          format: table
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: 0
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/workspace" -w /workspace aquasec/trivy:0.65.0 \
+            config --severity CRITICAL --exit-code 0 .
