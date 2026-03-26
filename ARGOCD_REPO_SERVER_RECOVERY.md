@@ -25,16 +25,19 @@ That left `argocd-repo-server` without ready endpoints, which caused:
 
 ## Fix Applied
 
-A Git-tracked deployment patch was added at:
+A Git-tracked repo-server recovery patch was added at:
 
-- `platform/argocd-config/argocd-repo-server-patch.yaml`
+- `ops/argocd-recovery/argocd-repo-server-initcontainer-patch.yaml`
 
 The fix makes the `copyutil` init container idempotent by removing the target files before copy/link creation and using `ln -sf`.
 
 ## Recovery Flow
 
 1. Commit and push the Git-tracked patch to `leninkart-infra/dev`.
-2. Apply the patch from the Git-tracked file once to recover the ArgoCD control plane itself.
+2. Apply the patch from the Git-tracked file once to recover the ArgoCD control plane itself:
+
+   `kubectl patch deployment argocd-repo-server -n argocd --type strategic --patch-file ops/argocd-recovery/argocd-repo-server-initcontainer-patch.yaml`
+
 3. Wait for `argocd-repo-server` to become Ready and its service to gain endpoints.
 4. Allow `leninkart-root` to reconcile the new `argocd-config` application.
 5. Verify that the live `argocd-cm` now contains:
