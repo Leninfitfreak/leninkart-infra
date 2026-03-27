@@ -1,7 +1,7 @@
 replicaCount: 1
 image:
   repository: leninfitfreak/order-service
-  tag: "23599512459"
+  tag: '23599211965'
   pullPolicy: IfNotPresent
 service:
   type: ClusterIP
@@ -33,55 +33,38 @@ resources:
   limits:
     cpu: 500m
     memory: 768Mi
-# hostAliases removed for k3d; pods can resolve 172.18.0.1 directly
 env:
-  JAVA_TOOL_OPTIONS: "-XX:InitialRAMPercentage=25 -XX:MaxRAMPercentage=70 -XX:+UseContainerSupport"
-  # ---------- DATABASE ----------
+  JAVA_TOOL_OPTIONS: -XX:InitialRAMPercentage=25 -XX:MaxRAMPercentage=70 -XX:+UseContainerSupport
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
   SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
-  SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "60000"
-  # ---------- KAFKA ----------
+  SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: '60000'
   SPRING_KAFKA_BOOTSTRAP_SERVERS: 172.18.0.1:9092
   KAFKA_BOOTSTRAP_SERVERS: 172.18.0.1:9092
   MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus
-  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
-  MANAGEMENT_HEALTH_KAFKA_ENABLED: "false"
-  MANAGEMENT_HEALTH_BINDERS_ENABLED: "false"
-  MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED: "true"
-  MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED: "true"
-  MANAGEMENT_TRACING_ENABLED: "false"
-  OTEL_SDK_DISABLED: "false"
-  OTEL_SERVICE_NAME: "order-service"
-  OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo.dev.svc.cluster.local:4318"
-  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
-  OTEL_TRACES_EXPORTER: "otlp"
-  OTEL_METRICS_EXPORTER: "none"
-  OTEL_LOGS_EXPORTER: "none"
-  OTEL_PROPAGATORS: "tracecontext,baggage"
-  OTEL_TRACES_SAMPLER: "traceidratio"
-  OTEL_TRACES_SAMPLER_ARG: "1.0"
-  OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=dev,service.namespace=leninkart"
-  APP_JWT_ISSUER: "leninkart"
-  APP_JWT_TTL_SECONDS: "86400"
-  APP_AUTH_USERS: ""
+  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: 'true'
+  MANAGEMENT_HEALTH_KAFKA_ENABLED: 'false'
+  MANAGEMENT_HEALTH_BINDERS_ENABLED: 'false'
+  MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED: 'true'
+  MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED: 'true'
+  MANAGEMENT_TRACING_ENABLED: 'false'
+  OTEL_SDK_DISABLED: 'false'
+  OTEL_SERVICE_NAME: order-service
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo.dev.svc.cluster.local:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_TRACES_EXPORTER: otlp
+  OTEL_METRICS_EXPORTER: none
+  OTEL_LOGS_EXPORTER: none
+  OTEL_PROPAGATORS: tracecontext,baggage
+  OTEL_TRACES_SAMPLER: traceidratio
+  OTEL_TRACES_SAMPLER_ARG: '1.0'
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=dev,service.namespace=leninkart
+  APP_JWT_ISSUER: leninkart
+  APP_JWT_TTL_SECONDS: '86400'
+  APP_AUTH_USERS: ''
 annotations:
-  prometheus.io/scrape: "true"
-  prometheus.io/port: "8080"
-# ============================================
-# VAULT SECRETS INTEGRATION
-# ============================================
-# Secrets are now managed by HashiCorp Vault via External Secrets Operator
-# 
-# To enable Vault secrets in deployments, add envFrom to your deployment:
-#
-# envFrom:
-#   - secretRef:
-#       name: product-service-db-secret
-#   - secretRef:
-#       name: product-service-config-secret
-#
-# This replaces hardcoded environment variables with Vault-managed secrets
+  prometheus.io/scrape: 'true'
+  prometheus.io/port: '8080'
 secrets:
   vault:
     enabled: true
