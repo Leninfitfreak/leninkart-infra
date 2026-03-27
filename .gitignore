@@ -2,8 +2,11 @@
 project_dump.txt
 fix.py
 dump.py
-project_dump.txt
 _cleanup_backup/
 _ingress_backup/
+_backup*/
 *_ingress*.yaml
 *.bak*
+local-deployment*
+helm_*_values-dev.yaml
+infraleninkart-infra

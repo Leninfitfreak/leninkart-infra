@@ -1,179 +1,109 @@
 # LeninKart Infrastructure
 
-Production-grade Kubernetes infrastructure for the LeninKart e-commerce platform.
+GitOps source of truth for the LeninKart dev platform.
 
-## 🏗️ Architecture
+## What This Repo Owns
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    GitOps (ArgoCD)                      │
-│  Declarative infrastructure management across envs      │
-└─────────────────────────────────────────────────────────┘
-                          │
-        ┌─────────────────┼─────────────────┐
-        │                 │                 │
-┌───────▼────────┐ ┌──────▼──────┐ ┌───────▼────────┐
-│ Applications   │ │  Platform   │ │ Observability  │
-├────────────────┤ ├─────────────┤ ├────────────────┤
-│ • Frontend     │ │ • Kafka     │ │ • Prometheus   │
-│ • Product API  │ │ • PostgreSQL│ │ • Grafana      │
-│ • Order API    │ │ • Istio     │ │ • Jaeger       │
-│ • Ingress      │ │ • Vault     │ │ • OTel         │
-└────────────────┘ └─────────────┘ └────────────────┘
-```
+This repository defines the Kubernetes-side platform that ArgoCD reconciles for LeninKart.
 
-## 📁 Directory Structure
+Current live scope:
 
-```
+- application deployments
+  - `frontend`
+  - `product-service`
+  - `order-service`
+- ingress and routing
+- PostgreSQL
+- Vault and External Secrets integration
+- observability apps
+  - Grafana
+  - Prometheus
+  - Loki
+  - Promtail
+  - Tempo
+- ArgoCD app-of-apps definitions for the dev environment
+
+The active GitOps branch for the current local platform is `dev`.
+
+## Current GitOps Model
+
+- root application: `argocd/leninkart-root.yaml`
+- target revision: `dev`
+- application definitions: `argocd/applications/dev/`
+- namespace focus: `dev`, with supporting namespaces such as `argocd`, `vault`, and `external-secrets-system`
+
+ArgoCD currently reconciles the real app set under `argocd/applications/dev`, including:
+
+- `frontend-dev`
+- `dev-product-service`
+- `dev-order-service`
+- `postgres-dev`
+- `grafana-dev`
+- `prometheus-dev`
+- `loki-dev`
+- `promtail-dev`
+- `tempo-dev`
+- `vault`
+- `vault-secretstore`
+- `vault-externalsecrets`
+- `dev-ingress`
+- `loadtest-dev`
+- `argocd-config`
+
+## Repository Layout
+
+```text
 leninkart-infra/
-├── applications/          # Microservices & application components
-│   ├── frontend/         # React UI
-│   ├── product-service/  # Product catalog API
-│   ├── order-service/    # Order processing API
-│   └── ingress/          # Ingress controller
-│
-├── platform/             # Infrastructure components
-│   ├── kafka/           # Event streaming
-│   ├── postgres/        # Database
-│   ├── istio/           # Service mesh
-│   ├── vault/           # Secrets management
-│   └── external-secrets/# ESO integration
-│
-├── observability/        # Monitoring & tracing
-│   ├── prometheus/      # Metrics collection
-│   ├── grafana/         # Dashboards
-│   ├── jaeger/          # Distributed tracing
-│   └── otel/            # OpenTelemetry collector
-│
-├── argocd/              # GitOps configurations
-│   ├── applications/    # App-of-apps pattern
-│   │   ├── dev/
-│   │   ├── staging/
-│   │   └── prod/
-│   └── projects/        # ArgoCD projects
-│
-├── docs/                # Documentation
-└── scripts/             # Utility scripts
+  applications/
+    frontend/
+    product-service/
+    order-service/
+    ingress/
+  argocd/
+    leninkart-root.yaml
+    applications/dev/
+  observability/
+    grafana/
+    prometheus/
+    loki/
+    promtail/
+    tempo/
+  platform/
+    ingress/
+    loadtest/
+    vault/
+    argocd-config/
+  scripts/
+    up-local.ps1
+    down-local.ps1
+    reseed-vault-local.ps1
+    verify-local.ps1
 ```
 
-## 🚀 Quick Start
+## Local Environment
 
-### Prerequisites
-- Kubernetes cluster (Minikube/Kind for local)
-- kubectl configured
-- ArgoCD installed
+This repo is currently aligned to the local LeninKart dev environment:
 
-### Deploy Everything
+- cluster: `k3d-leninkart-dev`
+- GitOps branch: `dev`
+- primary workload namespace: `dev`
 
-```bash
-# Apply ArgoCD root application
-kubectl apply -f argocd/leninkart-root.yaml
+## How Changes Flow
 
-# Watch deployment
-kubectl get applications -n argocd -w
-```
+1. Update the relevant app or platform manifest or Helm values in this repo.
+2. Commit the change to `dev`.
+3. ArgoCD reconciles the matching application.
+4. Runtime status is verified in ArgoCD as `Synced` and `Healthy`.
 
-### Access Services
+For Jira-driven deployments, this repo is updated by the separate `deployment-poc` orchestrator.
 
-```bash
-# Frontend
-kubectl port-forward -n dev svc/leninkart-frontend 8080:80
-
-# Product API
-kubectl port-forward -n dev svc/leninkart-product-service 8081:8081
-
-# Order API
-kubectl port-forward -n dev svc/leninkart-order-service 8082:8080
-
-# Grafana
-kubectl port-forward -n dev svc/grafana 3000:3000
-
-# Jaeger UI
-kubectl port-forward -n dev svc/jaeger-query 16686:16686
-```
-
-## 🔧 Tech Stack
-
-| Component | Technology |
-|-----------|------------|
-| **Container Orchestration** | Kubernetes |
-| **GitOps** | ArgoCD |
-| **Service Mesh** | Istio |
-| **Secrets Management** | HashiCorp Vault + External Secrets Operator |
-| **Message Broker** | Apache Kafka (KRaft mode) |
-| **Database** | PostgreSQL |
-| **Metrics** | Prometheus |
-| **Tracing** | Jaeger + OpenTelemetry |
-| **Visualization** | Grafana |
-| **Ingress** | NGINX Ingress Controller |
-
-## 📊 Observability
-
-### Metrics
-- **Prometheus** scrapes metrics from all services
-- **Grafana** provides dashboards for visualization
-- Custom dashboards for each microservice
-
-### Tracing
-- **OpenTelemetry** instrumentation in Java/Spring Boot services
-- **Istio** generates service mesh traces
-- **Jaeger** stores and visualizes distributed traces
-
-### Architecture
-```
-Services → OTel Agent → OTel Collector → Jaeger (traces)
-                                      ↓
-                               Prometheus (metrics)
-                                      ↓
-                              Grafana (dashboards)
-```
-
-## 🔐 Secrets Management
-
-All secrets are managed by HashiCorp Vault and synced to Kubernetes via External Secrets Operator.
-
-```yaml
-# Example: Database credentials
-ExternalSecret → Vault → Kubernetes Secret → Pod
-```
-
-No secrets are stored in Git!
-
-## 🌐 Networking
-
-**Istio Service Mesh** handles all traffic:
-- mTLS between services
-- Circuit breaking & retries
-- Traffic splitting (A/B testing)
-- Observability (automatic tracing)
-
-**Ingress Gateway** routes external traffic:
-- `/` → Frontend
-- `/api/products` → Product Service
-- `/api/orders` → Order Service
-
-## 🏷️ Environments
-
-| Environment | Namespace | Branch | Auto-Deploy |
-|-------------|-----------|--------|-------------|
-| Development | `dev` | `dev` | ✅ Yes |
-| Staging | `staging` | `staging` | ✅ Yes |
-| Production | `prod` | `main` | ❌ Manual |
-
-## 📚 Documentation
+## Key Docs
 
 - [Vault Setup](docs/VAULT_SETUP.md)
-- [Observability Guide](docs/OBSERVABILITY.md)
-- [Istio Configuration](docs/ISTIO.md)
+- [Vault + ArgoCD Initialization](docs/VAULT_ARGOCD_INIT.md)
+- [ArgoCD Repo-Server Recovery](ARGOCD_REPO_SERVER_RECOVERY.md)
 
-## 🤝 Contributing
+## Notes
 
-1. Make changes in feature branch
-2. Update relevant environment (dev/staging/prod)
-3. Commit and push
-4. ArgoCD auto-syncs changes
-5. Verify deployment
-
-## 📄 License
-
-Private - LeninKart Internal Use Only
+- This repo is intentionally declarative. Local helper scripts may assist cluster bootstrap or verification, but the deployed state is defined by Git-managed manifests and values.
+- Deprecated local analysis dumps, report files, and one-off helper artifacts have been removed to keep the repo focused on the active GitOps system.
