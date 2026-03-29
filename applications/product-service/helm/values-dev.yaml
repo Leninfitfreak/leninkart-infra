@@ -1,7 +1,7 @@
 replicaCount: 1
 image:
   repository: leninfitfreak/product-service
-  tag: '23701741505'
+  tag: rollback-bad-20260329
   pullPolicy: IfNotPresent
 service:
   type: ClusterIP
