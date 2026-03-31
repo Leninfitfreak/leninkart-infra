@@ -13,6 +13,12 @@ on:
       - main
   workflow_dispatch:
 
+env:
+  TRIVY_VERSION: 0.65.0
+  TRIVY_TIMEOUT: 15m
+  TRIVY_GATE_SEVERITY: CRITICAL
+  TRIVY_REPORT_SEVERITY: HIGH,CRITICAL
+
 jobs:
   validate-infra:
     runs-on: ubuntu-latest
@@ -37,7 +43,35 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run Trivy config scan
+      - name: Prepare Trivy config scan workspace
+        shell: bash
         run: |
-          docker run --rm -v "${{ github.workspace }}:/workspace" -w /workspace aquasec/trivy:0.65.0 \
-            config --severity CRITICAL --exit-code 0 .
+          set -euo pipefail
+          rm -rf .trivy-scan
+          mkdir -p .trivy-scan/argocd .trivy-scan/k8s .trivy-scan/platform .trivy-scan/rendered
+          cp -R argocd/. .trivy-scan/argocd/
+          cp -R k8s/. .trivy-scan/k8s/
+          cp -R platform/. .trivy-scan/platform/
+          helm template frontend applications/frontend/helm > .trivy-scan/rendered/frontend.yaml
+          helm template product-service applications/product-service/helm \
+            --values applications/product-service/helm/values-dev.yaml > .trivy-scan/rendered/product-service-dev.yaml
+          helm template order-service applications/order-service/helm \
+            --values applications/order-service/helm/values-dev.yaml > .trivy-scan/rendered/order-service-dev.yaml
+
+      - name: Run Trivy config scan report
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -v "${{ github.workspace }}:/workspace" -w /workspace aquasec/trivy:${TRIVY_VERSION} \
+            config --timeout ${TRIVY_TIMEOUT} --skip-version-check \
+            --severity ${TRIVY_REPORT_SEVERITY} --exit-code 0 \
+            .trivy-scan
+
+      - name: Enforce Trivy config gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -v "${{ github.workspace }}:/workspace" -w /workspace aquasec/trivy:${TRIVY_VERSION} \
+            config --timeout ${TRIVY_TIMEOUT} --skip-version-check \
+            --severity ${TRIVY_GATE_SEVERITY} --exit-code 1 \
+            .trivy-scan
