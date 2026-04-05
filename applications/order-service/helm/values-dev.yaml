@@ -1,4 +1,4 @@
-replicaCount: 1
+replicaCount: 2
 image:
   repository: leninfitfreak/order-service
   tag: '23816583483'
@@ -28,11 +28,11 @@ livenessProbe:
   failureThreshold: 10
 resources:
   requests:
-    cpu: 150m
+    cpu: 200m
     memory: 256Mi
   limits:
     cpu: 500m
-    memory: 768Mi
+    memory: 512Mi
 env:
   JAVA_TOOL_OPTIONS: -XX:InitialRAMPercentage=25 -XX:MaxRAMPercentage=70 -XX:+UseContainerSupport
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.dev.svc.cluster.local:5432/leninkart
