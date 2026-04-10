@@ -1,0 +1,101 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-seed-kv
+  namespace: vault
+  labels:
+    app: vault-seed
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: vault-seed
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: vault
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - vault
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - name: vault-seed
+        image: hashicorp/vault:1.15.4
+        command:
+        - /bin/sh
+        - -c
+        args:
+        - |
+          set -eu
+
+          export VAULT_ADDR="http://vault.vault.svc.cluster.local:8200"
+
+          wait_for_vault() {
+            for _ in $(seq 1 60); do
+              if vault status >/dev/null 2>&1; then
+                return 0
+              fi
+              sleep 2
+            done
+            return 1
+          }
+
+          wait_for_vault
+
+          if [ ! -f /vault/data/bootstrap-keys.json ]; then
+            echo "Vault bootstrap file missing; cannot seed." >&2
+            exit 1
+          fi
+
+          BOOTSTRAP_JSON="$(tr -d '\n\r\t ' < /vault/data/bootstrap-keys.json)"
+          ROOT_TOKEN="$(printf '%s' "$BOOTSTRAP_JSON" | sed -n 's/.*"root_token":"\([^"]*\)".*/\1/p')"
+
+          if [ -z "$ROOT_TOKEN" ]; then
+            echo "Vault root token missing; cannot seed." >&2
+            exit 1
+          fi
+
+          export VAULT_TOKEN="$ROOT_TOKEN"
+
+          vault kv put secret/leninkart/postgres/admin \
+            POSTGRES_DB=leninkart \
+            POSTGRES_USER=postgres \
+            POSTGRES_PASSWORD=postgres123
+
+          vault kv put secret/leninkart/order-service/database \
+            username=postgres \
+            password=postgres123
+
+          vault kv put secret/leninkart/product-service/database \
+            username=postgres \
+            password=postgres123
+
+          vault kv put secret/leninkart/order-service/config \
+            jwt_secret=staging-order-jwt \
+            api_key=staging-order-api
+
+          vault kv put secret/leninkart/product-service/config \
+            jwt_secret=staging-product-jwt \
+            api_key=staging-product-api
+
+          vault kv put secret/leninkart/observability/grafana \
+            admin-user=admin \
+            admin-password=admin123
+
+          vault kv put secret/leninkart/kafka/credentials \
+            username=kafka \
+            password=kafka123
+        volumeMounts:
+        - name: vault-data
+          mountPath: /vault/data
+      volumes:
+      - name: vault-data
+        persistentVolumeClaim:
+          claimName: data-vault-0
