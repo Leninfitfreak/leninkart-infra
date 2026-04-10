@@ -1,0 +1,73 @@
+replicaCount: 1
+image:
+  repository: leninfitfreak/product-service
+  tag: '23817402173'
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 8081
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
+startupProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8081
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  failureThreshold: 30
+readinessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8081
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 6
+livenessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8081
+  initialDelaySeconds: 60
+  periodSeconds: 20
+  failureThreshold: 10
+env:
+  SERVER_PORT: '8081'
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.staging.svc.cluster.local:5432/leninkart
+  SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+  SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+  SPRING_JPA_HIBERNATE_DDL_AUTO: update
+  SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: 'true'
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: 10.20.1.43:9092
+  KAFKA_BOOTSTRAP_SERVERS: 10.20.1.43:9092
+  APP_JWT_ISSUER: leninkart
+  APP_JWT_TTL_SECONDS: '86400'
+  APP_AUTH_USERS: ''
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus
+  MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED: 'true'
+  MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED: 'true'
+  MANAGEMENT_TRACING_ENABLED: 'false'
+  OTEL_SDK_DISABLED: 'false'
+  OTEL_SERVICE_NAME: product-service
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo.staging.svc.cluster.local:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_TRACES_EXPORTER: otlp
+  OTEL_METRICS_EXPORTER: none
+  OTEL_LOGS_EXPORTER: none
+  OTEL_PROPAGATORS: tracecontext,baggage
+  OTEL_TRACES_SAMPLER: traceidratio
+  OTEL_TRACES_SAMPLER_ARG: '1.0'
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=staging,service.namespace=leninkart
+annotations:
+  prometheus.io/scrape: 'true'
+  prometheus.io/port: '8081'
+secrets:
+  vault:
+    enabled: true
+    secretStore: vault-backend
+    refreshInterval: 1h
+    dbSecretName: product-service-db-secret
+    configSecretName: product-service-config-secret

@@ -1,35 +1,37 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: vault-externalsecrets
+  name: vault
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "4"  # Deploy last
+    argocd.argoproj.io/sync-wave: '2'
   finalizers:
-    - resources-finalizer.argocd.argoproj.io
+  - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: main
-    path: platform/external-secrets/applications
+    path: platform/vault/config
     directory:
       recurse: true
-  
   destination:
     server: https://kubernetes.default.svc
-    namespace: dev
-  
+    namespace: vault
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=true
+    - CreateNamespace=true
     retry:
-      limit: 3
+      limit: 5
       backoff:
-        duration: 10s
+        duration: 5s
         factor: 2
-        maxDuration: 5m
-
+        maxDuration: 3m
+  ignoreDifferences:
+  - group: batch
+    kind: Job
+    jsonPointers:
+    - /spec/template/metadata/labels

@@ -1,0 +1,74 @@
+replicaCount: 2
+image:
+  repository: leninfitfreak/order-service
+  tag: '23816583483'
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 8080
+startupProbe:
+  tcpSocket:
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  failureThreshold: 60
+readinessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 6
+livenessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8080
+  initialDelaySeconds: 60
+  periodSeconds: 20
+  failureThreshold: 10
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+env:
+  JAVA_TOOL_OPTIONS: -XX:InitialRAMPercentage=25 -XX:MaxRAMPercentage=70 -XX:+UseContainerSupport
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.staging.svc.cluster.local:5432/leninkart
+  SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+  SPRING_JPA_HIBERNATE_DDL_AUTO: update
+  SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: '60000'
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: 10.20.1.43:9092
+  KAFKA_BOOTSTRAP_SERVERS: 10.20.1.43:9092
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus
+  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: 'true'
+  MANAGEMENT_HEALTH_KAFKA_ENABLED: 'false'
+  MANAGEMENT_HEALTH_BINDERS_ENABLED: 'false'
+  MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED: 'true'
+  MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED: 'true'
+  MANAGEMENT_TRACING_ENABLED: 'false'
+  OTEL_SDK_DISABLED: 'false'
+  OTEL_SERVICE_NAME: order-service
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo.staging.svc.cluster.local:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_TRACES_EXPORTER: otlp
+  OTEL_METRICS_EXPORTER: none
+  OTEL_LOGS_EXPORTER: none
+  OTEL_PROPAGATORS: tracecontext,baggage
+  OTEL_TRACES_SAMPLER: traceidratio
+  OTEL_TRACES_SAMPLER_ARG: '1.0'
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=staging,service.namespace=leninkart
+  APP_JWT_ISSUER: leninkart
+  APP_JWT_TTL_SECONDS: '86400'
+  APP_AUTH_USERS: ''
+annotations:
+  prometheus.io/scrape: 'true'
+  prometheus.io/port: '8080'
+secrets:
+  vault:
+    enabled: true
+    secretStore: vault-backend
+    refreshInterval: 1h
+    dbSecretName: order-service-db-secret
+    configSecretName: order-service-config-secret

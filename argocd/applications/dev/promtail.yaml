@@ -14,7 +14,7 @@ spec:
         valueFiles:
           - $values/observability/promtail/values-dev.yaml
     - repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
-      targetRevision: dev
+      targetRevision: main
       ref: values
   destination:
     server: https://kubernetes.default.svc

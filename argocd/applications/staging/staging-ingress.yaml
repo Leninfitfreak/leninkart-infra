@@ -1,22 +1,20 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: argocd-config
+  name: staging-ingress
   namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
 spec:
   project: default
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: main
-    path: platform/argocd-config
-    directory:
-      recurse: true
+    path: platform/ingress/staging
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: staging
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+    - CreateNamespace=true

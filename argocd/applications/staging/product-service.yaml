@@ -4,11 +4,14 @@ metadata:
   name: product-service-staging
   namespace: argocd
 spec:
-  project: leninkart
+  project: default
   source:
-    repoURL: https://github.com/Leninfitfreak/leninkart-infra
-    targetRevision: staging
-    path: helm/product-service
+    repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
+    targetRevision: main
+    path: applications/product-service/helm
+    helm:
+      valueFiles:
+      - values-staging.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: staging
@@ -16,3 +19,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+    - CreateNamespace=true

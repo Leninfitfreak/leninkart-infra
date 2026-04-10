@@ -7,7 +7,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
-    targetRevision: dev
+    targetRevision: main
     path: applications/frontend/helm
     helm:
       valueFiles:

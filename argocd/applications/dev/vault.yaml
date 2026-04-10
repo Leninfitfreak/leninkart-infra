@@ -11,7 +11,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
-    targetRevision: dev
+    targetRevision: main
     path: platform/vault/config
     directory:
       recurse: true

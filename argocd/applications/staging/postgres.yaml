@@ -1,21 +1,19 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: argocd-config
+  name: postgres-staging
   namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
 spec:
   project: default
   source:
     repoURL: https://github.com/Leninfitfreak/leninkart-infra.git
     targetRevision: main
-    path: platform/argocd-config
+    path: platform/postgres
     directory:
       recurse: true
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: staging
   syncPolicy:
     automated:
       prune: true
