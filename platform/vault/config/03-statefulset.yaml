@@ -92,7 +92,7 @@ spec:
               vault policy write leninkart-policy /vault/config/policies/leninkart-policy.hcl >/dev/null
               vault write auth/kubernetes/role/leninkart-role \
                 bound_service_account_names=vault-auth \
-                bound_service_account_namespaces=dev \
+                bound_service_account_namespaces=staging \
                 policies=leninkart-policy \
                 ttl=24h >/dev/null
 
